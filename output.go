@@ -202,20 +202,19 @@ func (output *ForwardOutput) Start() {
 	output.spawnEmitter()
 }
 
-func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Duration, connectionTimeout time.Duration, writeTimeout time.Duration, flushInterval time.Duration) (*ForwardOutput, error) {
+func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Duration, connectionTimeout time.Duration, writeTimeout time.Duration, flushInterval time.Duration, journalGroupPath string, maxJournalChunkSize int64) (*ForwardOutput, error) {
 	_codec := codec.MsgpackHandle{}
 	_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
 	_codec.RawToString = false
 	_codec.StructToArray = true
 
-	maxSize := int64(131072)
 	journalFactory := NewFileJournalGroupFactory(
 		logger,
 		randSource,
 		time.Now,
 		".log",
 		os.FileMode(0600),
-		maxSize,
+		maxJournalChunkSize,
 	)
 	output := &ForwardOutput{
 		logger:            logger,
@@ -230,7 +229,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		spoolerShutdownChan: make(chan struct{}),
 		isShuttingDown:    unsafe.Pointer(uintptr(0)),
 	}
-	journalGroup, err := journalFactory.GetJournalGroup("*", output)
+	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +240,6 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		}
 	}()
 	output.journalGroup  = journalGroup
-	output.journal       = journalGroup.GetJournal("buffer")
+	output.journal       = journalGroup.GetJournal("output")
 	return output, nil
 }
