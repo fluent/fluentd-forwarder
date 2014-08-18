@@ -22,33 +22,66 @@ Command-line Options
 
   Retry interval in which connection is tried against the remote agent.
 
+  ```
+  -retry-interval 5s
+  ```
+
 * -conn-timeout
 
   Connection timeout after which the connection has failed.
+
+  ```
+  -conn-timeout 10s
+  ```
 
 * -write-timeout
 
   Write timeout on wire.
 
+  ```
+  -write-timeout 30s
+  ```
+
 * -flush-interval
 
   Flush interval in which the events are forwareded to the remote agent .
+
+  ```
+  -flush-interval 5s
+  ```
 
 * -listen-on
 
   Interface address and port on which the forwarder listens.
 
+  ```
+  -listen-on 127.0.0.1:24224
+  ```
+
 * -to
 
   Host and port to which the events are forwarded.
+
+  ```
+  -to remote-host.local:24225
+  ```
 
 * -buffer-path
 
   Directory / path on which buffer files are created. * may be used within the path to indicate the prefix or suffix like var/pre*suf
 
+  ```
+  -buffer-path /var/lib/fluent-forwarder
+  -buffer-path /var/lib/fluent-forwarder/prefix*suffix
+  ```
+
 * -buffer-chunk-limit
 
   Maximum size of a buffer chunk
+
+  ```
+  -buffer-chunk-limit 16777216
+  ```
 
 Dependencies
 ------------
