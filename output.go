@@ -118,6 +118,7 @@ func (output *ForwardOutput) spawnSpooler() {
 					defer chunk.Dispose()
 					output.logger.Info("Flushing chunk %s", chunk.String())
 					reader, err := chunk.GetReader()
+					defer reader.Close()
 					if err != nil {
 						return err
 					}

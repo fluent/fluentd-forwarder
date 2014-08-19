@@ -94,7 +94,7 @@ func (wrapper *FileJournalChunkWrapper) Size() (int64, error) {
 	return chunk.Size, nil
 }
 
-func (wrapper *FileJournalChunkWrapper) GetReader() (io.Reader, error) {
+func (wrapper *FileJournalChunkWrapper) GetReader() (io.ReadCloser, error) {
 	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
 	if chunk == nil {
 		return nil, errors.New("already disposed")
@@ -197,7 +197,7 @@ func (journal *FileJournal) deleteRef(chunk *FileJournalChunk) (error, bool) {
 	return nil, false
 }
 
-func (chunk *FileJournalChunk) getReader() (io.Reader, error) {
+func (chunk *FileJournalChunk) getReader() (io.ReadCloser, error) {
 	return os.OpenFile(chunk.Path, os.O_RDONLY, 0)
 }
 

@@ -39,7 +39,7 @@ type JournalChunk interface {
 	Disposable
 	String() string
 	Size() (int64, error)
-	GetReader() (io.Reader, error)
+	GetReader() (io.ReadCloser, error)
 	GetNextChunk() JournalChunk
 	TakeOwnership() bool
 }
