@@ -81,7 +81,9 @@ func (output *ForwardOutput) sendBuffer(buf []byte) error {
 			output.logger.Error("Failed to flush buffer (reason: %s, left: %d bytes)", err.Error(), len(buf))
 			err_, ok := err.(net.Error)
 			if !ok || (!err_.Timeout() && !err_.Temporary()) {
-				return err
+				output.conn.Close()
+				output.conn = nil
+				continue
 			}
 		}
 		if n > 0 {
