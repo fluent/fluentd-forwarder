@@ -19,6 +19,7 @@ type FluentdForwarderParams struct {
 	MaxJournalChunkSize int64
 	ListenOn string
 	ForwardTo string
+	LogLevel logging.Level
 }
 
 var progName = os.Args[0]
@@ -37,6 +38,18 @@ func Error(fmtStr string, args... interface{}) {
 	fmt.Fprint(os.Stderr, "\n")
 }
 
+type LogLevelValue logging.Level
+
+func (v *LogLevelValue) String() string {
+	return logging.Level(*v).String()
+}
+
+func (v *LogLevelValue) Set(s string) error {
+	_v, err := logging.LogLevel(s)
+	*v = LogLevelValue(_v)
+	return err
+}
+
 func ParseArgs() *FluentdForwarderParams {
 	retryInterval := (time.Duration)(0)
 	connectionTimeout := (time.Duration)(0)
@@ -46,6 +59,7 @@ func ParseArgs() *FluentdForwarderParams {
 	forwardTo := ""
 	journalGroupPath := ""
 	maxJournalChunkSize := int64(16777216)
+	logLevel := LogLevelValue(logging.INFO)
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
@@ -57,6 +71,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.StringVar(&forwardTo, "to", "127.0.0.1:24225", "host and port to which the events are forwarded")
 	flagSet.StringVar(&journalGroupPath, "buffer-path", "*", "directory / path on which buffer files are created. * may be used within the path to indicate the prefix or suffix like var/pre*suf")
 	flagSet.Int64Var(&maxJournalChunkSize, "buffer-chunk-limit", 16777216, "Maximum size of a buffer chunk")
+	flagSet.Var(&logLevel, "log-level", "log level (defaults to INFO)")
 	flagSet.Parse(os.Args[1:])
 
 	return &FluentdForwarderParams {
@@ -68,18 +83,18 @@ func ParseArgs() *FluentdForwarderParams {
 		ForwardTo: forwardTo,
 		JournalGroupPath: journalGroupPath,
 		MaxJournalChunkSize: maxJournalChunkSize,
+		LogLevel: logging.Level(logLevel),
 	}
 }
 
 func main() {
 	logBackend := logging.NewLogBackend(os.Stderr, "[fluentd-forwarder] ", log.Ltime)
 	logging.SetBackend(logBackend)
-	logging.SetLevel(logging.INFO, "fluentd-forwarder")
 	logger := logging.MustGetLogger("fluentd-forwarder")
-	workerSet := fluentd_forwarder.NewWorkerSet()
-
 	params := ParseArgs()
+	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
 
+	workerSet := fluentd_forwarder.NewWorkerSet()
 	output, err := fluentd_forwarder.NewForwardOutput(
 		logger,
 		params.ForwardTo,

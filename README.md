@@ -83,6 +83,14 @@ Command-line Options
   -buffer-chunk-limit 16777216
   ```
 
+* -log-level
+
+  Logging level. Any one of the following values; CRITICAL, ERROR, WARNING, NOTICE, INFO and DEBUG.
+
+  ```
+  -log-level DEBUG
+  ```
+
 Dependencies
 ------------
 
