@@ -4,10 +4,15 @@ import (
 	"testing"
 	"time"
 	"math/rand"
+	"runtime"
 	logging "github.com/op/go-logging"
 	"os"
 	"fmt"
+	"io"
+	"bufio"
 	"io/ioutil"
+	"sync"
+	"sync/atomic"
 )
 
 type DummyWorker struct { v int }
@@ -19,7 +24,7 @@ func (*DummyWorker) WaitForShutdown() {}
 
 type DummyChunkListener struct {
 	t *testing.T
-	chunks []JournalChunk
+	chunks []FileJournalChunk
 }
 
 func (*DummyChunkListener) NewChunkCreated(chunk JournalChunk) error {
@@ -27,7 +32,9 @@ func (*DummyChunkListener) NewChunkCreated(chunk JournalChunk) error {
 }
 
 func (listener *DummyChunkListener) ChunkFlushed(chunk JournalChunk) error {
-	listener.chunks = append(listener.chunks, chunk)
+	defer chunk.Dispose()
+	impl := chunk.(*FileJournalChunkWrapper)
+	listener.chunks = append(listener.chunks, *impl.chunk)
 	listener.t.Logf("flush %d", len(listener.chunks))
 	return nil
 }
@@ -100,6 +107,7 @@ func Test_Journal_EmitVeryFirst(t *testing.T) {
 	journalGroup, err := factory.GetJournalGroup(tempDir + "/test", dummyWorker)
 	if err != nil { t.FailNow() }
 	journal := journalGroup.GetFileJournal("key")
+	defer journal.Dispose()
 	err = journal.Write([]byte("test"))
 	if err != nil { t.FailNow() }
 	if journal.chunks.count != 1 { t.Fail() }
@@ -124,6 +132,7 @@ func Test_Journal_EmitTwice(t *testing.T) {
 	journalGroup, err := factory.GetJournalGroup(tempDir + "/test", dummyWorker)
 	if err != nil { t.FailNow() }
 	journal := journalGroup.GetFileJournal("key")
+	defer journal.Dispose()
 	err = journal.Write([]byte("test1"))
 	if err != nil { t.FailNow() }
 	err = journal.Write([]byte("test2"))
@@ -150,6 +159,7 @@ func Test_Journal_EmitRotating(t *testing.T) {
 	journalGroup, err := factory.GetJournalGroup(tempDir + "/test", dummyWorker)
 	if err != nil { t.FailNow() }
 	journal := journalGroup.GetFileJournal("key")
+	defer journal.Dispose()
 	err = journal.Write([]byte("test1"))
 	if err != nil { t.FailNow() }
 	err = journal.Write([]byte("test2"))
@@ -224,6 +234,7 @@ func Test_Journal_Scanning_Ok(t *testing.T) {
 		journalGroup, err := factory.GetJournalGroup(prefix, dummyWorker)
 		if err != nil { t.FailNow() }
 		journal := journalGroup.GetFileJournal("key")
+		defer journal.Dispose()
 		t.Logf("journal.chunks.count=%d", journal.chunks.count)
 		t.Logf("journal.chunks.first.Size=%d", journal.chunks.first.Size)
 		if journal.chunks.count != i { t.Fail() }
@@ -232,7 +243,8 @@ func Test_Journal_Scanning_Ok(t *testing.T) {
 			if chunk.Path != paths[j] { t.Fail() }
 			j += 1
 		}
-		journal.Purge()
+		journal.Flush(nil)
+		t.Logf("journal.chunks.count=%d", journal.chunks.count)
 		if journal.chunks.count != 1 { t.Fail() }
 	}
 }
@@ -315,9 +327,10 @@ func Test_Journal_FlushListener(t *testing.T) {
 	journalGroup, err := factory.GetJournalGroup(tempDir + "/test", dummyWorker)
 	if err != nil { t.FailNow() }
 	journal := journalGroup.GetFileJournal("key")
+	defer journal.Dispose()
 	listener := &DummyChunkListener {
 		t: t,
-		chunks: make([]JournalChunk, 0, 5),
+		chunks: make([]FileJournalChunk, 0, 5),
 	}
 	journal.AddFlushListener(listener)
 	journal.AddFlushListener(listener)
@@ -333,11 +346,12 @@ func Test_Journal_FlushListener(t *testing.T) {
 	if err != nil { t.FailNow() }
 	t.Logf("journal.chunks.count=%d", journal.chunks.count)
 	t.Logf("journal.chunks.first.Size=%d", journal.chunks.first.Size)
+	t.Logf("len(listener.chunks)=%d", len(listener.chunks))
 	if journal.chunks.count != 5 { t.Fail() }
 	if journal.chunks.first.Size != 5 { t.Fail() }
 	if len(listener.chunks) != 4 { t.Fail() }
-	readAll := func (chunk JournalChunk) string {
-		reader, err := chunk.GetReader()
+	readAll := func (chunk FileJournalChunk) string {
+		reader, err := chunk.getReader()
 		if err != nil { t.FailNow() }
 		bytes, err := ioutil.ReadAll(reader)
 		if err != nil { t.FailNow() }
@@ -347,16 +361,101 @@ func Test_Journal_FlushListener(t *testing.T) {
 	if readAll(listener.chunks[1]) != "test2" { t.Fail() }
 	if readAll(listener.chunks[2]) != "test3" { t.Fail() }
 	if readAll(listener.chunks[3]) != "test4" { t.Fail() }
-	journal.Purge()
-	if journal.chunks.count != 5 { t.Fail() }
-	for _, chunk := range listener.chunks {
-		chunk.Dispose()
-	}
+	journal.Flush(nil)
 	t.Logf("journal.chunks.count=%d", journal.chunks.count)
-	t.Logf("journal.chunks.first.Size=%ld", journal.chunks.first.Size)
-	journal.Purge()
+	t.Logf("journal.chunks.first.Size=%d", journal.chunks.first.Size)
 	if journal.chunks.count != 1 { t.Fail() }
 	if journal.chunks.first.Type != JournalFileType('b') { t.Fail() }
 }
 
+func countLines(r io.Reader) (int, error) {
+	count := 0
+	bi := bufio.NewReader(r)
+	for {
+		_, _, err := bi.ReadLine()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return 0, err
+		}
+		count += 1
+	}
+	return count, nil
+}
 
+func Test_Journal_Concurrency(t *testing.T) {
+	logging.InitForTesting(logging.NOTICE)
+	logger := logging.MustGetLogger("journal")
+	tempDir, err := ioutil.TempDir("", "journal")
+	if err != nil { t.FailNow() }
+	factory := NewFileJournalGroupFactory(
+		logger,
+		rand.NewSource(0),
+		func () time.Time { return time.Date(2014, 1, 1, 0, 0, 0, 0, time.UTC) },
+		".log",
+		os.FileMode(0644),
+		16,
+	)
+	dummyWorker := &DummyWorker {}
+	t.Log(tempDir + "/test")
+	journalGroup, err := factory.GetJournalGroup(tempDir + "/test", dummyWorker)
+	if err != nil { t.FailNow() }
+	journal := journalGroup.GetFileJournal("key")
+	defer journal.Dispose()
+	cond := sync.Cond{ L: &sync.Mutex{} }
+	count := int64(0)
+	outerWg := sync.WaitGroup {}
+	doFlush := func() {
+		journal.Flush(func (chunk JournalChunk) error {
+			defer chunk.Dispose()
+			reader, err := chunk.GetReader()
+			if err != nil {
+				t.Log(err.Error())
+				t.FailNow()
+			}
+			defer reader.Close()
+			c, err := countLines(reader)
+			if err != nil {
+				t.Log(err.Error())
+				t.FailNow()
+			}
+			atomic.AddInt64(&count, int64(c))
+			return nil
+		})
+	}
+	for j := 0; j < 10; j += 1 {
+		outerWg.Add(1)
+		go func(j int) {
+			defer outerWg.Done()
+			wg := sync.WaitGroup {}
+			starting := sync.WaitGroup {}
+			for i := 0; i < 10; i += 1 {
+				wg.Add(1)
+				starting.Add(1)
+				go func (i int) {
+					defer wg.Done()
+					starting.Done()
+					cond.L.Lock()
+					cond.Wait()
+					cond.L.Unlock()
+					for k := 0; k < 3; k += 1 {
+						data := fmt.Sprintf("test%d\n", i)
+						err = journal.Write([]byte(data))
+						if err != nil {
+							t.Log(err.Error())
+							t.FailNow()
+						}
+					}
+				}(i)
+			}
+			starting.Wait()
+			cond.Broadcast()
+			runtime.Gosched()
+			doFlush()
+			wg.Wait()
+		}(j)
+	}
+	outerWg.Wait()
+	doFlush()
+	if count != 300 { t.Logf("%d", count); t.Fail() }
+}
