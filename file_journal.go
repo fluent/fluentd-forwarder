@@ -223,7 +223,7 @@ func (chunk *FileJournalChunk) getReader() (io.ReadCloser, error) {
 	defer chunk.mtx.Unlock()
 	rdr, err := os.OpenFile(chunk.Path, os.O_RDONLY, 0)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 	return rdr, err
 }
