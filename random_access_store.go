@@ -56,6 +56,97 @@ func NewSeekerWrapper(s RandomAccessStore) *SeekerWrapper {
 	return &SeekerWrapper{s, s.(io.Seeker), ns}
 }
 
+type CloseHook struct {
+	c io.Closer
+	r io.Reader
+	w io.Writer
+	ra io.ReaderAt
+	wa io.WriterAt
+	sk io.Seeker
+	sz interface { Size() (int64, error) }
+	n interface { Name() string }
+	callback func(s io.Closer)
+}
+
+func (c *CloseHook) Close() error {
+	err := c.c.Close()
+	if err != nil {
+		return err
+	}
+	c.callback(c.c)
+	return nil
+}
+
+func (c *CloseHook) Name() string {
+	if c.n == nil {
+		panic("Underlying interface does not provide Name() (string)")
+	}
+	return c.n.Name()
+}
+
+func (c *CloseHook) Size() (int64, error) {
+	if c.sz == nil {
+		panic("Underlying interface does not provide Size() (int64, error)")
+	}
+	return c.sz.Size()
+}
+
+func (c *CloseHook) Read(p []byte) (int, error) {
+	if c.r == nil {
+		panic("Underlying interface does not provide Read([]byte) (int, error)")
+	}
+	return c.r.Read(p)
+}
+
+func (c *CloseHook) ReadAt(p []byte, offset int64) (int, error) {
+	if c.ra == nil {
+		panic("Underlying interface does not provide ReadAt([]byte, int64) (int, error)")
+	}
+	return c.ra.ReadAt(p, offset)
+}
+
+func (c *CloseHook) Write(p []byte) (int, error) {
+	if c.w == nil {
+		panic("Underlying interface does not provide Write([]byte) (int, error)")
+	}
+	return c.w.Write(p)
+}
+
+func (c *CloseHook) WriteAt(p []byte, offset int64) (int, error) {
+	if c.wa == nil {
+		panic("Underlying interface does not provide WriteAt([]byte, int64) (int, error)")
+	}
+	return c.wa.WriteAt(p, offset)
+}
+
+func (c *CloseHook) Seek(offset int64, whence int) (int64, error) {
+	if c.sk == nil {
+		panic("Underlying interface does not provide Seek(int64, int) (int64, error)")
+	}
+	return c.sk.Seek(offset, whence)
+}
+
+func NewCloseHook(c io.Closer, callback func (s io.Closer)) *CloseHook {
+	r, _ := c.(io.Reader)
+	w, _ := c.(io.Writer)
+	ra, _ := c.(io.ReaderAt)
+	wa, _ := c.(io.WriterAt)
+	sk, _ := c.(io.Seeker)
+	sz, _ := c.(interface { Size() (int64, error) })
+	n, _ := c.(interface { Name() string })
+	return &CloseHook {
+		c: c,
+		r: r,
+		w: w,
+		ra: ra,
+		wa: wa,
+		sk: sk,
+		sz: sz,
+		n: n,
+		callback: callback,
+	}
+}
+
 type StoreReadWriter struct {
 	s    RandomAccessStore
 	pos  int64
@@ -148,14 +239,25 @@ func (ras *MemoryRandomAccessStoreFactory) RandomAccessStore() (RandomAccessStor
 }
 
 type TempFileRandomAccessStoreFactory struct {
-	dir    string
-	prefix string
+	Dir    string
+	Prefix string
+	GCChan chan *os.File
 }
 
 func (ras *TempFileRandomAccessStoreFactory) RandomAccessStore() (RandomAccessStore, error) {
-	f, err := ioutil.TempFile(ras.dir, ras.prefix)
+	f, err := ioutil.TempFile(ras.Dir, ras.Prefix)
 	if err != nil {
 		return nil, err
 	}
-	return NewSeekerWrapper(f), nil
+	f_ := (RandomAccessStore)(f)
+	if ras.GCChan != nil {
+		c := ras.GCChan
+		f_ = NewCloseHook(
+			f_,
+			func (s io.Closer) {
+				c <- s.(*os.File)
+			},
+		)
+	}
+	return NewSeekerWrapper(f_), nil
 }

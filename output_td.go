@@ -37,6 +37,7 @@ type tdOutputSpoolerDaemon struct {
 	spoolers     map[string]*tdOutputSpooler
 	tempFactory  TempFileRandomAccessStoreFactory
 	wg           sync.WaitGroup
+	endNotify  func(*tdOutputSpoolerDaemon)
 }
 
 type TDOutput struct {
@@ -55,6 +56,7 @@ type TDOutput struct {
 	spoolerDaemon  *tdOutputSpoolerDaemon
 	isShuttingDown unsafe.Pointer
 	client         *td_client.TDClient
+	gcChan         chan *os.File
 }
 
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
@@ -190,7 +192,10 @@ outer:
 			break outer
 		}
 	}
-	daemon.output.logger.Notice("Spooler ended")
+	if daemon.endNotify != nil {
+		daemon.endNotify(daemon)
+	}
+	daemon.output.logger.Notice("Spooler daemon ended")
 }
 
 func newTDOutputSpoolerDaemon(output *TDOutput) *tdOutputSpoolerDaemon {
@@ -198,8 +203,11 @@ func newTDOutputSpoolerDaemon(output *TDOutput) *tdOutputSpoolerDaemon {
 		output:       output,
 		shutdownChan: make(chan struct{}, 1),
 		spoolers:     make(map[string]*tdOutputSpooler),
-		tempFactory:  TempFileRandomAccessStoreFactory{output.tempDir, ""},
+		tempFactory:  TempFileRandomAccessStoreFactory{output.tempDir, "", output.gcChan},
 		wg:           sync.WaitGroup{},
+		endNotify:    func(*tdOutputSpoolerDaemon) {
+			close(output.gcChan)
+		},
 	}
 }
 
@@ -276,6 +284,24 @@ func (output *TDOutput) spawnEmitter() {
 	}()
 }
 
+func (output *TDOutput) spawnTempFileCollector() {
+	output.logger.Notice("Spawning temporary file collector")
+	output.wg.Add(1)
+	go func() {
+		defer func() {
+			output.wg.Done()
+		}()
+		for f := range output.gcChan {
+			output.logger.Debug("Deleting %s...", f.Name())
+			err := os.Remove(f.Name())
+			if err != nil {
+				output.logger.Warning("Failed to delete %s: %s", f.Name(), err.Error())
+			}
+		}
+		output.logger.Debug("temporary file collector ended")
+	}()
+}
+
 func (output *TDOutput) Emit(recordSets []FluentRecordSet) error {
 	defer func() {
 		recover()
@@ -301,6 +327,7 @@ func (output *TDOutput) WaitForShutdown() {
 }
 
 func (output *TDOutput) Start() {
+	output.spawnTempFileCollector()
 	output.spawnEmitter()
 	output.spawnSpoolerDaemon()
 }
@@ -366,6 +393,7 @@ func NewTDOutput(
 		databaseName:   databaseName,
 		tableName:      tableName,
 		tempDir:        tempDir,
+		gcChan:         make(chan *os.File, 10),
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
