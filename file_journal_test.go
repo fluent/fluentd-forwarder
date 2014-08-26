@@ -408,7 +408,7 @@ func Test_Journal_Concurrency(t *testing.T) {
 	doFlush := func() {
 		journal.Flush(func (chunk JournalChunk) error {
 			defer chunk.Dispose()
-			reader, err := chunk.GetReader()
+			reader, err := chunk.Reader()
 			if err != nil {
 				t.Log(err.Error())
 				t.FailNow()

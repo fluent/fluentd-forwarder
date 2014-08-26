@@ -37,11 +37,12 @@ type Disposable interface {
 
 type JournalChunk interface {
 	Disposable
+	Id() string
 	String() string
 	Size() (int64, error)
-	GetReader() (io.ReadCloser, error)
-	GetNextChunk() JournalChunk
-	TakeOwnership() bool
+	Reader() (io.ReadCloser, error)
+	NextChunk() JournalChunk
+	MD5Sum() ([]byte, error)
 }
 
 type JournalChunkListener interface {
@@ -53,7 +54,7 @@ type Journal interface {
 	Disposable
 	Key() string
 	Write(data []byte) error
-	GetTailChunk() JournalChunk
+	TailChunk() JournalChunk
 	AddNewChunkListener(JournalChunkListener)
 	AddFlushListener(JournalChunkListener)
 	Flush(func (JournalChunk) error) error

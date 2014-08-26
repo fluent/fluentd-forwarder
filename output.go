@@ -117,7 +117,7 @@ func (output *ForwardOutput) spawnSpooler() {
 				err := output.journal.Flush(func(chunk JournalChunk) error {
 					defer chunk.Dispose()
 					output.logger.Info("Flushing chunk %s", chunk.String())
-					reader, err := chunk.GetReader()
+					reader, err := chunk.Reader()
 					defer reader.Close()
 					if err != nil {
 						return err

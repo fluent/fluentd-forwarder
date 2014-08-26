@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
+	"crypto/md5"
 )
 
 type FileJournalChunkDequeueHead struct {
@@ -76,7 +77,6 @@ type FileJournalGroupFactory struct {
 type FileJournalChunkWrapper struct {
 	journal *FileJournal
 	chunk *FileJournalChunk
-	ownershipTaken int64
 }
 
 func (wrapper *FileJournalChunkWrapper) Path() (string, error) {
@@ -85,6 +85,14 @@ func (wrapper *FileJournalChunkWrapper) Path() (string, error) {
 		return "", errors.New("already disposed")
 	}
 	return chunk.getPath(), nil
+}
+
+func (wrapper *FileJournalChunkWrapper) Id() string {
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	if chunk == nil {
+		return ""
+	}
+	return string(chunk.UniqueId)
 }
 
 func (wrapper *FileJournalChunkWrapper) String() string {
@@ -104,7 +112,7 @@ func (wrapper *FileJournalChunkWrapper) Size() (int64, error) {
 	return chunk.getSize(), nil
 }
 
-func (wrapper *FileJournalChunkWrapper) GetReader() (io.ReadCloser, error) {
+func (wrapper *FileJournalChunkWrapper) Reader() (io.ReadCloser, error) {
 	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
 	if chunk == nil {
 		return nil, errors.New("already disposed")
@@ -112,7 +120,15 @@ func (wrapper *FileJournalChunkWrapper) GetReader() (io.ReadCloser, error) {
 	return chunk.getReader()
 }
 
-func (wrapper *FileJournalChunkWrapper) GetNextChunk() JournalChunk {
+func (wrapper *FileJournalChunkWrapper) MD5Sum() ([]byte, error) {
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	if chunk == nil {
+		return nil, errors.New("already disposed")
+	}
+	return chunk.md5Sum()
+}
+
+func (wrapper *FileJournalChunkWrapper) NextChunk() JournalChunk {
 	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
 	if chunk == nil {
 		return nil
@@ -125,19 +141,6 @@ func (wrapper *FileJournalChunkWrapper) GetNextChunk() JournalChunk {
 	}
 }
 
-func (wrapper *FileJournalChunkWrapper) TakeOwnership() bool {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
-	if chunk == nil {
-		return false
-	}
-	if atomic.CompareAndSwapInt64(&wrapper.ownershipTaken, 0, 1) {
-		wrapper.journal.deleteRef((*FileJournalChunk)(chunk))
-		return true
-	} else {
-		return false
-	}
-}
-
 func (wrapper *FileJournalChunkWrapper) Dispose() error {
 	chunk := (*FileJournalChunk)(atomic.SwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk)), nil))
 	if chunk == nil {
@@ -147,7 +150,7 @@ func (wrapper *FileJournalChunkWrapper) Dispose() error {
 	if err != nil {
 		return err
 	}
-	if destroyed && wrapper.ownershipTaken != 0 && chunk.head.next == nil {
+	if destroyed && chunk.head.next == nil {
 		// increment the refcount of the last chunk
 		// to rehold the reference
 		prevChunk := chunk.head.prev
@@ -160,7 +163,7 @@ func (wrapper *FileJournalChunkWrapper) Dispose() error {
 
 func (journal *FileJournal) newChunkWrapper(chunk *FileJournalChunk) *FileJournalChunkWrapper {
 	journal.addRef(chunk)
-	return &FileJournalChunkWrapper { journal, chunk, 0 }
+	return &FileJournalChunkWrapper { journal, chunk }
 }
 
 func (journal *FileJournal) addRef(chunk *FileJournalChunk) int32 {
@@ -236,6 +239,23 @@ func (chunk *FileJournalChunk) getPath() string {
 
 func (chunk *FileJournalChunk) getSize() int64 {
 	return atomic.LoadInt64(&chunk.Size)
+}
+
+func (chunk *FileJournalChunk) md5Sum() ([]byte, error) {
+	chunk.mtx.Lock()
+	defer chunk.mtx.Unlock()
+	h := md5.New()
+	rdr, err := os.OpenFile(chunk.Path, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer rdr.Close()
+	_, err = io.Copy(h, rdr)
+	if err != nil {
+		return nil, err
+	}
+	retval := make([]byte, 0, h.Size())
+	return h.Sum(retval), err
 }
 
 func (chunk *FileJournalChunk) getNextChunk(journal *FileJournal) *FileJournalChunk {
@@ -482,7 +502,7 @@ func (journal *FileJournal) Write(data []byte) error {
 	return nil
 }
 
-func (journal *FileJournal) GetTailChunk() JournalChunk {
+func (journal *FileJournal) TailChunk() JournalChunk {
 	retval := (*FileJournalChunkWrapper)(nil)
 	{
 		journal.chunks.mtx.Lock()

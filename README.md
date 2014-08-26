@@ -64,6 +64,11 @@ Command-line Options
 
   ```
   -to remote-host.local:24225
+  -to fluent://remote-host.local:24225
+  -to https+td://urlencoded-api-key@/*/*
+  -to https+td://urlencoded-api-key@/database/*
+  -to https+td://urlencoded-api-key@/database/table
+  -to https+td://urlencoded-api-key@endpoint/*/*
   ```
 
 * -buffer-path
