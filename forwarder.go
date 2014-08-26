@@ -57,7 +57,7 @@ type Journal interface {
 	TailChunk() JournalChunk
 	AddNewChunkListener(JournalChunkListener)
 	AddFlushListener(JournalChunkListener)
-	Flush(func (JournalChunk) error) error
+	Flush(func(JournalChunk) error) error
 }
 
 type JournalGroup interface {

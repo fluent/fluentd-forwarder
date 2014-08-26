@@ -1,13 +1,13 @@
 package fluentd_forwarder
 
 import (
-	"time"
+	"errors"
 	"fmt"
 	"net/url"
-	"strings"
 	"regexp"
 	"strconv"
-	"errors"
+	"strings"
+	"time"
 )
 
 type JournalFileType rune
@@ -18,28 +18,28 @@ const (
 )
 
 type JournalPathInfo struct {
-	Key string
-	Type JournalFileType
+	Key             string
+	Type            JournalFileType
 	VariablePortion string
-	TSuffix string
-	Timestamp int64 // elapsed time in msec since epoch
-	UniqueId []byte
+	TSuffix         string
+	Timestamp       int64 // elapsed time in msec since epoch
+	UniqueId        []byte
 }
 
-var NilJournalPathInfo = JournalPathInfo { "", 0, "", "", 0, nil }
+var NilJournalPathInfo = JournalPathInfo{"", 0, "", "", 0, nil}
 
 var pathRegexp, _ = regexp.Compile(fmt.Sprintf("^(.*)[._](%c|%c)([0-9a-fA-F]{1,32})$", Head, Rest))
 
 func encodeKey(key string) string {
 	keyLen := len(key)
-	retval := make([]byte, keyLen * 2)
+	retval := make([]byte, keyLen*2)
 	i := 0
 	for j := 0; j < keyLen; j += 1 {
 		c := key[j]
 		if c == '-' || c == '_' || c == '.' || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
 			cap_ := cap(retval)
 			if i >= cap_ {
-				newRetval := make([]byte, cap_ + len(key))
+				newRetval := make([]byte, cap_+len(key))
 				copy(newRetval, retval)
 				retval = newRetval
 			}
@@ -47,11 +47,11 @@ func encodeKey(key string) string {
 			i += 1
 		} else {
 			cap_ := cap(retval)
-			if i + 3 > cap_ {
+			if i+3 > cap_ {
 				newSize := cap_
 				for {
 					newSize += len(key)
-					if i + 3 <= newSize {
+					if i+3 <= newSize {
 						break
 					}
 					if newSize < cap_ {
@@ -64,8 +64,8 @@ func encodeKey(key string) string {
 				retval = newRetval
 			}
 			retval[i] = '%'
-			retval[i + 1] = "0123456789abcdef"[(c >> 4) & 15]
-			retval[i + 2] = "0123456789abcdef"[c & 15]
+			retval[i+1] = "0123456789abcdef"[(c>>4)&15]
+			retval[i+2] = "0123456789abcdef"[c&15]
 			i += 3
 		}
 	}
@@ -80,12 +80,12 @@ func convertTSuffixToUniqueId(tSuffix string) ([]byte, error) {
 	tSuffixLen := len(tSuffix)
 	buf := make([]byte, tSuffixLen)
 	for i := 0; i < tSuffixLen; i += 2 {
-		ii, err := strconv.ParseUint(tSuffix[i:i + 2], 16, 8)
+		ii, err := strconv.ParseUint(tSuffix[i:i+2], 16, 8)
 		if err != nil {
 			return nil, err
 		}
-		buf[i / 2] = byte(ii)
-		buf[(i + tSuffixLen) / 2] = byte(ii)
+		buf[i/2] = byte(ii)
+		buf[(i+tSuffixLen)/2] = byte(ii)
 	}
 	return buf, nil
 }
@@ -111,21 +111,23 @@ func BuildJournalPathWithTSuffix(key string, bq JournalFileType, tSuffix string)
 
 func BuildJournalPath(key string, bq JournalFileType, time_ time.Time, randValue int64) JournalPathInfo {
 	timestamp := time_.UnixNano()
-	t := (timestamp / 1000) << 12 | (randValue & 0xfff)
+	t := (timestamp/1000)<<12 | (randValue & 0xfff)
 	tSuffix := strconv.FormatInt(t, 16)
 	if pad := 16 - len(tSuffix); pad > 0 {
 		// unlikely
 		tSuffix = strings.Repeat("0", pad) + tSuffix
 	}
 	uniqueId, err := convertTSuffixToUniqueId(tSuffix)
-	if err != nil { panic("WTF? " + err.Error()); } // should never happen
-	return JournalPathInfo {
-		Key: key,
-		Type: bq,
+	if err != nil {
+		panic("WTF? " + err.Error())
+	} // should never happen
+	return JournalPathInfo{
+		Key:             key,
+		Type:            bq,
 		VariablePortion: BuildJournalPathWithTSuffix(key, bq, tSuffix),
-		TSuffix: tSuffix,
-		Timestamp: timestamp,
-		UniqueId: uniqueId,
+		TSuffix:         tSuffix,
+		Timestamp:       timestamp,
+		UniqueId:        uniqueId,
 	}
 }
 
@@ -153,12 +155,12 @@ func DecodeJournalPath(variablePortion string) (JournalPathInfo, error) {
 	if err != nil {
 		return NilJournalPathInfo, errors.New("malformed path string")
 	}
-	return JournalPathInfo {
-		Key: key,
-		Type: JournalFileType(firstRune(m[2])),
+	return JournalPathInfo{
+		Key:             key,
+		Type:            JournalFileType(firstRune(m[2])),
 		VariablePortion: variablePortion,
-		TSuffix: m[3],
-		Timestamp: timestamp,
-		UniqueId: uniqueId,
+		TSuffix:         m[3],
+		Timestamp:       timestamp,
+		UniqueId:        uniqueId,
 	}, nil
 }

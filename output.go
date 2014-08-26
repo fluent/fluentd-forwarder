@@ -2,37 +2,37 @@ package fluentd_forwarder
 
 import (
 	"bytes"
-	"github.com/ugorji/go/codec"
 	logging "github.com/op/go-logging"
+	"github.com/ugorji/go/codec"
+	"io"
+	"math/rand"
 	"net"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
-	"io"
-	"os"
-	"math/rand"
 	"unsafe"
 )
 
 var randSource = rand.NewSource(time.Now().UnixNano())
 
 type ForwardOutput struct {
-	logger            *logging.Logger
-	codec             *codec.MsgpackHandle
-	bind              string
-	retryInterval     time.Duration
-	connectionTimeout time.Duration
-	writeTimeout      time.Duration
-	enc               *codec.Encoder
-	conn              net.Conn
-	flushInterval     time.Duration
-	wg                sync.WaitGroup
-	journalGroup      JournalGroup
-	journal           Journal
-	emitterChan       chan FluentRecordSet
+	logger              *logging.Logger
+	codec               *codec.MsgpackHandle
+	bind                string
+	retryInterval       time.Duration
+	connectionTimeout   time.Duration
+	writeTimeout        time.Duration
+	enc                 *codec.Encoder
+	conn                net.Conn
+	flushInterval       time.Duration
+	wg                  sync.WaitGroup
+	journalGroup        JournalGroup
+	journal             Journal
+	emitterChan         chan FluentRecordSet
 	spoolerShutdownChan chan struct{}
-	isShuttingDown    unsafe.Pointer
+	isShuttingDown      unsafe.Pointer
 }
 
 func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
@@ -71,7 +71,7 @@ func (output *ForwardOutput) sendBuffer(buf []byte) error {
 		}
 		startTime := time.Now()
 		if output.writeTimeout == 0 {
-			output.conn.SetWriteDeadline(time.Time {})
+			output.conn.SetWriteDeadline(time.Time{})
 		} else {
 			output.conn.SetWriteDeadline(startTime.Add(output.writeTimeout))
 		}
@@ -99,7 +99,7 @@ func (output *ForwardOutput) spawnSpooler() {
 	output.wg.Add(1)
 	go func() {
 		ticker := time.NewTicker(output.flushInterval)
-		defer func () {
+		defer func() {
 			ticker.Stop()
 			output.journal.Dispose()
 			if output.conn != nil {
@@ -109,7 +109,8 @@ func (output *ForwardOutput) spawnSpooler() {
 			output.wg.Done()
 		}()
 		output.logger.Notice("Spooler started")
-		outer: for {
+	outer:
+		for {
 			select {
 			case <-ticker.C:
 				buf := make([]byte, 16777216)
@@ -125,7 +126,7 @@ func (output *ForwardOutput) spawnSpooler() {
 					for {
 						n, err := reader.Read(buf)
 						if n > 0 {
-							err_ :=output.sendBuffer(buf[:n])
+							err_ := output.sendBuffer(buf[:n])
 							if err_ != nil {
 								return err
 							}
@@ -220,29 +221,29 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		maxJournalChunkSize,
 	)
 	output := &ForwardOutput{
-		logger:            logger,
-		codec:             &_codec,
-		bind:              bind,
-		retryInterval:     retryInterval,
-		connectionTimeout: connectionTimeout,
-		writeTimeout:      writeTimeout,
-		wg:                sync.WaitGroup{},
-		flushInterval:     flushInterval,
-		emitterChan:       make(chan FluentRecordSet),
+		logger:              logger,
+		codec:               &_codec,
+		bind:                bind,
+		retryInterval:       retryInterval,
+		connectionTimeout:   connectionTimeout,
+		writeTimeout:        writeTimeout,
+		wg:                  sync.WaitGroup{},
+		flushInterval:       flushInterval,
+		emitterChan:         make(chan FluentRecordSet),
 		spoolerShutdownChan: make(chan struct{}),
-		isShuttingDown:    unsafe.Pointer(uintptr(0)),
+		isShuttingDown:      unsafe.Pointer(uintptr(0)),
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
 		return nil, err
 	}
-	defer func () {
+	defer func() {
 		err := journalGroup.Dispose()
 		if err != nil {
 			logger.Error("%#v", err)
 		}
 	}()
-	output.journalGroup  = journalGroup
-	output.journal       = journalGroup.GetJournal("output")
+	output.journalGroup = journalGroup
+	output.journal = journalGroup.GetJournal("output")
 	return output, nil
 }

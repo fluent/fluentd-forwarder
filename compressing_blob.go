@@ -1,35 +1,35 @@
 package fluentd_forwarder
 
 import (
-	td_client "github.com/treasure-data/td-client-go"
-	"os"
-	"io"
-	"errors"
 	"compress/gzip"
 	"crypto/md5"
+	"errors"
+	td_client "github.com/treasure-data/td-client-go"
 	"hash"
+	"io"
+	"os"
 )
 
 type CompressingBlob struct {
-	inner td_client.Blob
-	level int
-	bufferSize int
-	reader *CompressingBlobReader
+	inner       td_client.Blob
+	level       int
+	bufferSize  int
+	reader      *CompressingBlobReader
 	tempFactory RandomAccessStoreFactory
-	md5sum []byte
-	size int64
+	md5sum      []byte
+	size        int64
 }
 
 type CompressingBlobReader struct {
-	buf   []byte // ring buffer
-	o     int
-	src   io.ReadCloser
-	dst   *StoreReadWriter
-	s     SizedRandomAccessStore
-	w     *StoreReadWriter
-	cw    *gzip.Writer
-	h     hash.Hash
-	eof   bool
+	buf         []byte // ring buffer
+	o           int
+	src         io.ReadCloser
+	dst         *StoreReadWriter
+	s           SizedRandomAccessStore
+	w           *StoreReadWriter
+	cw          *gzip.Writer
+	h           hash.Hash
+	eof         bool
 	closeNotify func(*CompressingBlobReader)
 }
 
@@ -192,7 +192,7 @@ func (reader *CompressingBlobReader) md5sum() ([]byte, error) {
 func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 	err := (error)(nil)
 	src := (io.ReadCloser)(nil)
-	s   := (SizedRandomAccessStore)(nil)
+	s := (SizedRandomAccessStore)(nil)
 	defer func() {
 		if err != nil {
 			if src != nil {
@@ -212,22 +212,22 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 		return nil, err
 	}
 	s = s_.(SizedRandomAccessStore)
-	w := &StoreReadWriter { s, 0, -1 }
-	dst := &StoreReadWriter { s, 0, -1 }
+	w := &StoreReadWriter{s, 0, -1}
+	dst := &StoreReadWriter{s, 0, -1}
 	cw, err := gzip.NewWriterLevel(w, blob.level)
 	if err != nil {
 		return nil, err
 	}
-	return &CompressingBlobReader {
+	return &CompressingBlobReader{
 		buf: make([]byte, blob.bufferSize),
-		o: 0,
+		o:   0,
 		src: src,
 		dst: dst,
-		s: s,
-		w: w,
-		cw: cw,
+		s:   s,
+		w:   w,
+		cw:  cw,
 		eof: false,
-		h: md5.New(),
+		h:   md5.New(),
 		closeNotify: func(reader *CompressingBlobReader) {
 			md5sum, err := reader.md5sum()
 			if err == nil {
@@ -295,13 +295,13 @@ func (blob *CompressingBlob) MD5Sum() ([]byte, error) {
 }
 
 func NewCompressingBlob(blob td_client.Blob, bufferSize int, level int, tempFactory RandomAccessStoreFactory) td_client.Blob {
-	return &CompressingBlob {
-		inner: blob,
-		level: level,
-		bufferSize: bufferSize,
-		reader: nil,
+	return &CompressingBlob{
+		inner:       blob,
+		level:       level,
+		bufferSize:  bufferSize,
+		reader:      nil,
 		tempFactory: tempFactory,
-		md5sum: nil,
-		size: -1,
+		md5sum:      nil,
+		size:        -1,
 	}
 }

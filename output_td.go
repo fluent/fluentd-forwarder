@@ -2,32 +2,32 @@ package fluentd_forwarder
 
 import (
 	"bytes"
-	"github.com/ugorji/go/codec"
-	td_client "github.com/treasure-data/td-client-go"
+	"compress/gzip"
+	"errors"
 	logging "github.com/op/go-logging"
+	td_client "github.com/treasure-data/td-client-go"
+	"github.com/ugorji/go/codec"
 	"net"
+	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"os"
 	"unsafe"
-	"errors"
-	"compress/gzip"
-	"strings"
 )
 
 type tdOutputSpooler struct {
-	daemon       *tdOutputSpoolerDaemon
-	ticker       *time.Ticker
-	tag          string
-	databaseName string
-	tableName    string
-	key          string
-	journal      Journal
-	client       *td_client.TDClient
-	shutdownChan chan struct{}
-	isShuttingDown    unsafe.Pointer
+	daemon         *tdOutputSpoolerDaemon
+	ticker         *time.Ticker
+	tag            string
+	databaseName   string
+	tableName      string
+	key            string
+	journal        Journal
+	client         *td_client.TDClient
+	shutdownChan   chan struct{}
+	isShuttingDown unsafe.Pointer
 }
 
 type tdOutputSpoolerDaemon struct {
@@ -40,26 +40,26 @@ type tdOutputSpoolerDaemon struct {
 }
 
 type TDOutput struct {
-	logger            *logging.Logger
-	codec             *codec.MsgpackHandle
-	retryInterval     time.Duration
-	databaseName      string
-	tableName         string
-	tempDir           string
-	enc               *codec.Encoder
-	conn              net.Conn
-	flushInterval     time.Duration
-	wg                sync.WaitGroup
-	journalGroup      JournalGroup
-	emitterChan       chan FluentRecordSet
-	spoolerDaemon     *tdOutputSpoolerDaemon
-	isShuttingDown    unsafe.Pointer
-	client            *td_client.TDClient
+	logger         *logging.Logger
+	codec          *codec.MsgpackHandle
+	retryInterval  time.Duration
+	databaseName   string
+	tableName      string
+	tempDir        string
+	enc            *codec.Encoder
+	conn           net.Conn
+	flushInterval  time.Duration
+	wg             sync.WaitGroup
+	journalGroup   JournalGroup
+	emitterChan    chan FluentRecordSet
+	spoolerDaemon  *tdOutputSpoolerDaemon
+	isShuttingDown unsafe.Pointer
+	client         *td_client.TDClient
 }
 
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
 	for _, record := range records {
-		e := map[string]interface{}{ "time": record.Timestamp }
+		e := map[string]interface{}{"time": record.Timestamp}
 		for k, v := range record.Data {
 			e[k] = v
 		}
@@ -80,7 +80,8 @@ func (spooler *tdOutputSpooler) cleanup() {
 func (spooler *tdOutputSpooler) handle() {
 	defer spooler.cleanup()
 	spooler.daemon.output.logger.Notice("Spooler started")
-	outer: for {
+outer:
+	for {
 		select {
 		case <-spooler.ticker.C:
 			spooler.daemon.output.logger.Notice("Flushing...")
@@ -117,7 +118,7 @@ func normalizeDatabaseName(name string) (string, error) {
 		return "", errors.New("Empty name is not allowed")
 	}
 	if len(name_) < 3 {
-		name_ = append(name_, ("___"[0:3 - len(name)])...)
+		name_ = append(name_, ("___"[0 : 3-len(name)])...)
 	}
 	if 255 < len(name_) {
 		name_ = append(name_[0:253], "__"...)
@@ -138,15 +139,15 @@ func normalizeTableName(name string) (string, error) {
 
 func newTDOutputSpooler(daemon *tdOutputSpoolerDaemon, databaseName, tableName, key string) *tdOutputSpooler {
 	journal := daemon.output.journalGroup.GetJournal(key)
-	return &tdOutputSpooler {
-		daemon: daemon,
-		ticker: time.NewTicker(daemon.output.flushInterval),
+	return &tdOutputSpooler{
+		daemon:       daemon,
+		ticker:       time.NewTicker(daemon.output.flushInterval),
 		databaseName: databaseName,
-		tableName: tableName,
-		key: key,
-		journal: journal,
+		tableName:    tableName,
+		key:          key,
+		journal:      journal,
 		shutdownChan: make(chan struct{}, 1),
-		client: daemon.output.client,
+		client:       daemon.output.client,
 	}
 }
 
@@ -180,9 +181,10 @@ func (daemon *tdOutputSpoolerDaemon) cleanup() {
 }
 
 func (daemon *tdOutputSpoolerDaemon) handle() {
-	defer daemon.cleanup();
+	defer daemon.cleanup()
 	daemon.output.logger.Notice("Spooler daemon started")
-	outer: for {
+outer:
+	for {
 		select {
 		case <-daemon.shutdownChan:
 			break outer
@@ -192,12 +194,12 @@ func (daemon *tdOutputSpoolerDaemon) handle() {
 }
 
 func newTDOutputSpoolerDaemon(output *TDOutput) *tdOutputSpoolerDaemon {
-	return &tdOutputSpoolerDaemon {
-		output: output,
+	return &tdOutputSpoolerDaemon{
+		output:       output,
 		shutdownChan: make(chan struct{}, 1),
-		spoolers: make(map[string]*tdOutputSpooler),
-		tempFactory: TempFileRandomAccessStoreFactory { output.tempDir, "", },
-		wg: sync.WaitGroup {},
+		spoolers:     make(map[string]*tdOutputSpooler),
+		tempFactory:  TempFileRandomAccessStoreFactory{output.tempDir, ""},
+		wg:           sync.WaitGroup{},
 	}
 }
 
@@ -207,7 +209,6 @@ func (output *TDOutput) spawnSpoolerDaemon() {
 	output.wg.Add(1)
 	go output.spoolerDaemon.handle()
 }
-
 
 func (daemon *tdOutputSpoolerDaemon) getSpooler(tag string) (*tdOutputSpooler, error) {
 	databaseName := daemon.output.databaseName
@@ -335,47 +336,47 @@ func NewTDOutput(
 	)
 	router := (td_client.EndpointRouter)(nil)
 	if endpoint != "" {
-		router = &td_client.FixedEndpointRouter { endpoint }
+		router = &td_client.FixedEndpointRouter{endpoint}
 	}
 	httpProxy_ := (interface{})(nil)
 	if httpProxy != "" {
 		httpProxy_ = httpProxy
 	}
-	client, err := td_client.NewTDClient(td_client.Settings {
-		ApiKey: apiKey,
-		Router: router,
+	client, err := td_client.NewTDClient(td_client.Settings{
+		ApiKey:            apiKey,
+		Router:            router,
 		ConnectionTimeout: connectionTimeout,
 		// ReadTimeout: readTimeout, // TODO
 		SendTimeout: writeTimeout,
-		Ssl: useSsl,
-		Proxy: httpProxy_,
+		Ssl:         useSsl,
+		Proxy:       httpProxy_,
 	})
 	if err != nil {
 		return nil, err
 	}
 	output := &TDOutput{
-		logger:            logger,
-		codec:             &_codec,
-		retryInterval:     retryInterval,
-		wg:                sync.WaitGroup{},
-		flushInterval:     flushInterval,
-		emitterChan:       make(chan FluentRecordSet),
-		isShuttingDown:    unsafe.Pointer(uintptr(0)),
-		client:            client,
-		databaseName:      databaseName,
-		tableName:         tableName,
-		tempDir:           tempDir,
+		logger:         logger,
+		codec:          &_codec,
+		retryInterval:  retryInterval,
+		wg:             sync.WaitGroup{},
+		flushInterval:  flushInterval,
+		emitterChan:    make(chan FluentRecordSet),
+		isShuttingDown: unsafe.Pointer(uintptr(0)),
+		client:         client,
+		databaseName:   databaseName,
+		tableName:      tableName,
+		tempDir:        tempDir,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
 		return nil, err
 	}
-	defer func () {
+	defer func() {
 		err := journalGroup.Dispose()
 		if err != nil {
 			logger.Error("%#v", err)
 		}
 	}()
-	output.journalGroup  = journalGroup
+	output.journalGroup = journalGroup
 	return output, nil
 }

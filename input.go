@@ -3,8 +3,8 @@ package fluentd_forwarder
 import (
 	"errors"
 	"fmt"
-	"github.com/ugorji/go/codec"
 	logging "github.com/op/go-logging"
+	"github.com/ugorji/go/codec"
 	"io"
 	"net"
 	"reflect"

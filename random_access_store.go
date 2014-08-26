@@ -1,10 +1,10 @@
 package fluentd_forwarder
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
-	"errors"
 )
 
 type RandomAccessStore interface {
@@ -28,7 +28,7 @@ type RandomAccessStoreFactory interface {
 }
 
 type SeekerWrapper struct {
-	s RandomAccessStore
+	s  RandomAccessStore
 	sk io.Seeker
 	ns NamedRandomAccessStore
 }
@@ -53,12 +53,12 @@ func (s *SeekerWrapper) Size() (int64, error) {
 
 func NewSeekerWrapper(s RandomAccessStore) *SeekerWrapper {
 	ns, _ := s.(NamedRandomAccessStore)
-	return &SeekerWrapper { s, s.(io.Seeker), ns }
+	return &SeekerWrapper{s, s.(io.Seeker), ns}
 }
 
 type StoreReadWriter struct {
-	s RandomAccessStore
-	pos int64
+	s    RandomAccessStore
+	pos  int64
 	size int64
 }
 
@@ -106,7 +106,7 @@ func (s *MemoryRandomAccessStore) WriteAt(p []byte, offset int64) (int, error) {
 		if e <= cap(s.buf) {
 			s.buf = s.buf[0:e]
 		} else {
-			newBuf := make([]byte, e, cap(s.buf) * 2)
+			newBuf := make([]byte, e, cap(s.buf)*2)
 			copy(newBuf, s.buf)
 			s.buf = newBuf
 		}
@@ -136,19 +136,19 @@ func (s *MemoryRandomAccessStore) Size() (int64, error) {
 func (s *MemoryRandomAccessStore) Close() error { return nil }
 
 func NewMemoryRandomAccessStore() *MemoryRandomAccessStore {
-	return &MemoryRandomAccessStore {
+	return &MemoryRandomAccessStore{
 		buf: make([]byte, 0, 16),
 	}
 }
 
-type MemoryRandomAccessStoreFactory struct {}
+type MemoryRandomAccessStoreFactory struct{}
 
 func (ras *MemoryRandomAccessStoreFactory) RandomAccessStore() (RandomAccessStore, error) {
 	return NewMemoryRandomAccessStore(), nil
 }
 
 type TempFileRandomAccessStoreFactory struct {
-	dir string
+	dir    string
 	prefix string
 }
 

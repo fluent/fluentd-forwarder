@@ -1,19 +1,19 @@
 package fluentd_forwarder
 
 import (
+	"crypto/md5"
+	"errors"
+	"fmt"
+	logging "github.com/op/go-logging"
+	"io"
+	"math/rand"
 	"os"
 	"path"
-	"errors"
 	"strings"
-	"math/rand"
-	"time"
-	"fmt"
-	"io"
-	logging "github.com/op/go-logging"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
-	"crypto/md5"
 )
 
 type FileJournalChunkDequeueHead struct {
@@ -23,60 +23,60 @@ type FileJournalChunkDequeueHead struct {
 
 type FileJournalChunkDequeue struct {
 	first *FileJournalChunk
-	last *FileJournalChunk
+	last  *FileJournalChunk
 	count int
-	mtx sync.Mutex
+	mtx   sync.Mutex
 }
 
 type FileJournalChunk struct {
-	head FileJournalChunkDequeueHead
-	Path string
-	Type JournalFileType
-	TSuffix string
+	head      FileJournalChunkDequeueHead
+	Path      string
+	Type      JournalFileType
+	TSuffix   string
 	Timestamp int64
-	UniqueId []byte
-	Size int64
-	refcount int32
-	mtx sync.Mutex
+	UniqueId  []byte
+	Size      int64
+	refcount  int32
+	mtx       sync.Mutex
 }
 
 type FileJournal struct {
-	group *FileJournalGroup
-	key string
-	chunks FileJournalChunkDequeue
-	writer io.WriteCloser
+	group             *FileJournalGroup
+	key               string
+	chunks            FileJournalChunkDequeue
+	writer            io.WriteCloser
 	newChunkListeners map[JournalChunkListener]JournalChunkListener
-	flushListeners map[JournalChunkListener]JournalChunkListener
-	mtx sync.Mutex
+	flushListeners    map[JournalChunkListener]JournalChunkListener
+	mtx               sync.Mutex
 }
 
 type FileJournalGroup struct {
-	factory *FileJournalGroupFactory
-	worker Worker
+	factory    *FileJournalGroupFactory
+	worker     Worker
 	timeGetter func() time.Time
-	logger *logging.Logger
-	rand *rand.Rand
-	fileMode os.FileMode
-	maxSize int64
+	logger     *logging.Logger
+	rand       *rand.Rand
+	fileMode   os.FileMode
+	maxSize    int64
 	pathPrefix string
 	pathSuffix string
-	journals map[string]*FileJournal
-	mtx sync.Mutex
+	journals   map[string]*FileJournal
+	mtx        sync.Mutex
 }
 
 type FileJournalGroupFactory struct {
-	logger *logging.Logger
-	paths map[string]*FileJournalGroup
-	randSource rand.Source
-	timeGetter func() time.Time
+	logger            *logging.Logger
+	paths             map[string]*FileJournalGroup
+	randSource        rand.Source
+	timeGetter        func() time.Time
 	defaultPathSuffix string
-	defaultFileMode os.FileMode
-	maxSize int64
+	defaultFileMode   os.FileMode
+	maxSize           int64
 }
 
 type FileJournalChunkWrapper struct {
 	journal *FileJournal
-	chunk *FileJournalChunk
+	chunk   *FileJournalChunk
 }
 
 func (wrapper *FileJournalChunkWrapper) Path() (string, error) {
@@ -163,7 +163,7 @@ func (wrapper *FileJournalChunkWrapper) Dispose() error {
 
 func (journal *FileJournal) newChunkWrapper(chunk *FileJournalChunk) *FileJournalChunkWrapper {
 	journal.addRef(chunk)
-	return &FileJournalChunkWrapper { journal, chunk }
+	return &FileJournalChunkWrapper{journal, chunk}
 }
 
 func (journal *FileJournal) addRef(chunk *FileJournalChunk) int32 {
@@ -295,7 +295,7 @@ func (journal *FileJournal) finalizeChunk(chunk *FileJournalChunk) error {
 		Rest,
 		chunk.TSuffix,
 	)
-	newPath:= group.pathPrefix + variablePortion + group.pathSuffix
+	newPath := group.pathPrefix + variablePortion + group.pathSuffix
 	err := func() error {
 		chunk.mtx.Lock()
 		defer chunk.mtx.Unlock()
@@ -314,8 +314,8 @@ func (journal *FileJournal) finalizeChunk(chunk *FileJournalChunk) error {
 	return nil
 }
 
-func (journal *FileJournal) Flush(visitor func (JournalChunk) error) error {
-	err := func () error {
+func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
+	err := func() error {
 		journal.mtx.Lock()
 		defer journal.mtx.Unlock()
 		// this is safe the journal lock prevents any new chunk from being added to the head
@@ -345,7 +345,7 @@ func (journal *FileJournal) Flush(visitor func (JournalChunk) error) error {
 	if err != nil {
 		return err
 	}
-	nextOfFirstChunk, lastChunk := func () (*FileJournalChunk, *FileJournalChunk) {
+	nextOfFirstChunk, lastChunk := func() (*FileJournalChunk, *FileJournalChunk) {
 		journal.chunks.mtx.Lock()
 		defer journal.chunks.mtx.Unlock()
 		// detach all the leading chunks
@@ -403,15 +403,15 @@ func (journal *FileJournal) newChunk() (*FileJournalChunk, error) {
 		group.timeGetter(),
 		group.rand.Int63n(0xfff),
 	)
-	chunk := &FileJournalChunk {
-		head: FileJournalChunkDequeueHead { journal.chunks.first, nil },
-		Path: (group.pathPrefix + info.VariablePortion + group.pathSuffix),
-		Type: info.Type,
-		TSuffix: info.TSuffix,
+	chunk := &FileJournalChunk{
+		head:     FileJournalChunkDequeueHead{journal.chunks.first, nil},
+		Path:     (group.pathPrefix + info.VariablePortion + group.pathSuffix),
+		Type:     info.Type,
+		TSuffix:  info.TSuffix,
 		UniqueId: info.UniqueId,
 		refcount: 1,
 	}
-	file, err := os.OpenFile(chunk.Path, os.O_WRONLY | os.O_APPEND | os.O_CREATE | os.O_EXCL, journal.group.fileMode)
+	file, err := os.OpenFile(chunk.Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_EXCL, journal.group.fileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func (journal *FileJournal) Write(data []byte) error {
 	newChunkNeeded := false
 	{
 		journal.chunks.mtx.Lock()
-		newChunkNeeded = journal.writer == nil || journal.chunks.first == nil || journal.group.maxSize - journal.chunks.first.Size < int64(len(data))
+		newChunkNeeded = journal.writer == nil || journal.chunks.first == nil || journal.group.maxSize-journal.chunks.first.Size < int64(len(data))
 		journal.chunks.mtx.Unlock()
 	}
 	if newChunkNeeded {
@@ -542,13 +542,13 @@ func (journalGroup *FileJournalGroup) GetFileJournal(key string) *FileJournal {
 	if ok {
 		return journal
 	}
-	journal = &FileJournal {
-		group: journalGroup,
-		key: key,
-		chunks: FileJournalChunkDequeue { nil, nil, 0, sync.Mutex {} },
-		writer: nil,
+	journal = &FileJournal{
+		group:             journalGroup,
+		key:               key,
+		chunks:            FileJournalChunkDequeue{nil, nil, 0, sync.Mutex{}},
+		writer:            nil,
 		newChunkListeners: make(map[JournalChunkListener]JournalChunkListener),
-		flushListeners: make(map[JournalChunkListener]JournalChunkListener),
+		flushListeners:    make(map[JournalChunkListener]JournalChunkListener),
 	}
 	journalGroup.journals[key] = journal
 	return journal
@@ -580,7 +580,7 @@ func sortChunksByTimestamp(chunks *FileJournalChunkDequeue) {
 		return
 	}
 	for {
-		result := FileJournalChunkDequeue { nil , nil, chunks.count, sync.Mutex {} }
+		result := FileJournalChunkDequeue{nil, nil, chunks.count, sync.Mutex{}}
 		first := true
 		for {
 			picked := (*FileJournalChunk)(nil)
@@ -687,7 +687,7 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 			if !strings.HasSuffix(file, pathSuffix) {
 				continue
 			}
-			variablePortion := file[len(basename):len(file) - len(pathSuffix)]
+			variablePortion := file[len(basename) : len(file)-len(pathSuffix)]
 			info, err := DecodeJournalPath(variablePortion)
 			if err != nil {
 				logger.Warning("Unexpected file under the designated directory space (%s) - %s", dirname, file)
@@ -695,21 +695,21 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 			}
 			journalProto, ok := journals[info.Key]
 			if !ok {
-				journalProto = &FileJournal {
-					key: info.Key,
-					chunks: FileJournalChunkDequeue { nil, nil, 0, sync.Mutex {} },
+				journalProto = &FileJournal{
+					key:    info.Key,
+					chunks: FileJournalChunkDequeue{nil, nil, 0, sync.Mutex{}},
 					writer: nil,
 				}
 				journals[info.Key] = journalProto
 			}
-			chunk := &FileJournalChunk {
-				head: FileJournalChunkDequeueHead { nil, journalProto.chunks.last },
-				Type: info.Type,
-				Path: pathPrefix + info.VariablePortion + pathSuffix,
-				TSuffix: info.TSuffix,
+			chunk := &FileJournalChunk{
+				head:      FileJournalChunkDequeueHead{nil, journalProto.chunks.last},
+				Type:      info.Type,
+				Path:      pathPrefix + info.VariablePortion + pathSuffix,
+				TSuffix:   info.TSuffix,
 				Timestamp: info.Timestamp,
-				UniqueId: info.UniqueId,
-				refcount: 1,
+				UniqueId:  info.UniqueId,
+				refcount:  1,
 			}
 			if journalProto.chunks.last == nil {
 				journalProto.chunks.first = chunk
@@ -750,7 +750,7 @@ func (factory *FileJournalGroupFactory) GetJournalGroup(path string, worker Work
 	pos := strings.Index(path, "*")
 	if pos >= 0 {
 		pathPrefix = path[0:pos]
-		pathSuffix = path[pos + 1:]
+		pathSuffix = path[pos+1:]
 	} else {
 		pathPrefix = path + "."
 		pathSuffix = factory.defaultPathSuffix
@@ -761,25 +761,25 @@ func (factory *FileJournalGroupFactory) GetJournalGroup(path string, worker Work
 		return nil, err
 	}
 
-	journalGroup := &FileJournalGroup {
-		factory: factory,
-		worker: worker,
+	journalGroup := &FileJournalGroup{
+		factory:    factory,
+		worker:     worker,
 		timeGetter: factory.timeGetter,
-		logger: factory.logger,
-		rand: rand.New(factory.randSource),
-		fileMode: factory.defaultFileMode,
-		maxSize: factory.maxSize,
+		logger:     factory.logger,
+		rand:       rand.New(factory.randSource),
+		fileMode:   factory.defaultFileMode,
+		maxSize:    factory.maxSize,
 		pathPrefix: pathPrefix,
 		pathSuffix: pathSuffix,
-		journals: journals,
-		mtx: sync.Mutex {},
+		journals:   journals,
+		mtx:        sync.Mutex{},
 	}
 	for _, journal := range journals {
 		journal.group = journalGroup
 		journal.newChunkListeners = make(map[JournalChunkListener]JournalChunkListener)
 		journal.flushListeners = make(map[JournalChunkListener]JournalChunkListener)
 		chunk := journal.chunks.first
-		file, err := os.OpenFile(chunk.Path, os.O_WRONLY | os.O_APPEND, journal.group.fileMode)
+		file, err := os.OpenFile(chunk.Path, os.O_WRONLY|os.O_APPEND, journal.group.fileMode)
 		if err != nil {
 			journalGroup.Dispose()
 			return nil, err
@@ -807,14 +807,13 @@ func NewFileJournalGroupFactory(
 	defaultFileMode os.FileMode,
 	maxSize int64,
 ) *FileJournalGroupFactory {
-	return &FileJournalGroupFactory {
-		logger: logger,
-		paths: make(map[string]*FileJournalGroup),
-		randSource: randSource,
-		timeGetter: timeGetter,
+	return &FileJournalGroupFactory{
+		logger:            logger,
+		paths:             make(map[string]*FileJournalGroup),
+		randSource:        randSource,
+		timeGetter:        timeGetter,
 		defaultPathSuffix: defaultPathSuffix,
-		defaultFileMode: defaultFileMode,
-		maxSize: maxSize,
+		defaultFileMode:   defaultFileMode,
+		maxSize:           maxSize,
 	}
 }
-

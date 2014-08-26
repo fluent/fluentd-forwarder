@@ -13,7 +13,10 @@ func Test_BuildJournalPath(t *testing.T) {
 		0x0,
 	)
 	t.Logf("%+v", info)
-	if len(info.UniqueId) != len(info.TSuffix) { t.Fail() }
-	if info.VariablePortion != "test.b4eedd5baba000000" { t.Fail() }
+	if len(info.UniqueId) != len(info.TSuffix) {
+		t.Fail()
+	}
+	if info.VariablePortion != "test.b4eedd5baba000000" {
+		t.Fail()
+	}
 }
-
