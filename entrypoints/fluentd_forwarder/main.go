@@ -102,11 +102,11 @@ func ParseArgs() *FluentdForwarderParams {
 		case "fluent", "fluentd":
 			outputType = "fluent"
 			forwardTo = u.Host
-		case "http+td", "https+td":
+		case "td+http", "td+https":
 			outputType = "td"
 			forwardTo = u.Host
 			apiKey = u.User.Username()
-			if u.Scheme == "https+td" {
+			if u.Scheme == "td+https" {
 				ssl = true
 			}
 			p := strings.Split(u.Path, "/")
@@ -120,7 +120,10 @@ func ParseArgs() *FluentdForwarderParams {
 	} else {
 		outputType = "fluent"
 	}
-	if outputType == "fluent" {
+	if outputType == "" {
+		Error("Invalid output specifier")
+		os.Exit(1)
+	} else if outputType == "fluent" {
 		if !strings.ContainsRune(forwardTo, ':') {
 			forwardTo += ":24224"
 		}
