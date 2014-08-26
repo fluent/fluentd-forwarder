@@ -46,7 +46,7 @@ func MustParseDuration(s string) time.Duration {
 
 func Error(fmtStr string, args... interface{}) {
 	fmt.Fprint(os.Stderr, progName, " ")
-	fmt.Fprintf(os.Stderr, fmtStr, args)
+	fmt.Fprintf(os.Stderr, fmtStr, args...)
 	fmt.Fprint(os.Stderr, "\n")
 }
 
@@ -95,7 +95,7 @@ func ParseArgs() *FluentdForwarderParams {
 	if strings.Contains(forwardTo, "//") {
 		u, err := url.Parse(forwardTo)
 		if err != nil {
-			Error(err.Error())
+			Error("%s", err.Error())
 			os.Exit(1)
 		}
 		switch u.Scheme {
