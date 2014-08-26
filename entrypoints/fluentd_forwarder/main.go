@@ -45,7 +45,7 @@ func MustParseDuration(s string) time.Duration {
 }
 
 func Error(fmtStr string, args... interface{}) {
-	fmt.Fprint(os.Stderr, progName, " ")
+	fmt.Fprint(os.Stderr, progName, ": ")
 	fmt.Fprintf(os.Stderr, fmtStr, args...)
 	fmt.Fprint(os.Stderr, "\n")
 }
