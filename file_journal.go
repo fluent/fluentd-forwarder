@@ -386,8 +386,8 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
 				// re-attach chunks
 				journal.chunks.mtx.Lock()
 				defer journal.chunks.mtx.Unlock()
-				journal.chunks.first.head.next = nextOfFirstChunk
-				nextOfFirstChunk.head.prev = journal.chunks.first
+				journal.chunks.last.head.next = nextOfFirstChunk
+				nextOfFirstChunk.head.prev = journal.chunks.last
 				journal.chunks.last = lastChunk
 			}()
 		}
@@ -432,7 +432,7 @@ func (journal *FileJournal) newChunk() (*FileJournalChunk, error) {
 		} else {
 			journal.chunks.last = chunk
 		}
-		chunk.head.next = journal.chunks.first
+		chunk.head.next = oldHead
 		journal.chunks.first = chunk
 		journal.chunks.count += 1
 		journal.chunks.mtx.Unlock()
