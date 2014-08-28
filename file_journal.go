@@ -515,6 +515,12 @@ func (journal *FileJournal) Dispose() error {
 			return err
 		}
 		journal.writer = nil
+		if journal.chunks.first != nil {
+			err, _ := journal.deleteRef(journal.chunks.first)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
