@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"encoding/hex"
 	"time"
 	"unsafe"
 )
@@ -92,7 +93,7 @@ func (wrapper *FileJournalChunkWrapper) Id() string {
 	if chunk == nil {
 		return ""
 	}
-	return string(chunk.UniqueId)
+	return hex.EncodeToString(chunk.UniqueId)
 }
 
 func (wrapper *FileJournalChunkWrapper) String() string {
