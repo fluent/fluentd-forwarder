@@ -91,7 +91,14 @@ outer:
 			err := spooler.journal.Flush(func(chunk JournalChunk) error {
 				defer chunk.Dispose()
 				spooler.daemon.output.logger.Info("Flushing chunk %s", chunk.String())
-				_, err := spooler.client.Import(
+				size, err := chunk.Size()
+				if err != nil {
+					return err
+				}
+				if size == 0 {
+					return nil
+				}
+				_, err = spooler.client.Import(
 					spooler.databaseName,
 					spooler.tableName,
 					"msgpack.gz",
