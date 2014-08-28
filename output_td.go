@@ -90,6 +90,9 @@ outer:
 			spooler.daemon.output.logger.Notice("Flushing...")
 			err := spooler.journal.Flush(func(chunk JournalChunk) error {
 				defer chunk.Dispose()
+				if atomic.LoadPointer(&spooler.isShuttingDown) != unsafe.Pointer(uintptr(0)) {
+					return errors.New("Flush aborted")
+				}
 				spooler.daemon.output.logger.Info("Flushing chunk %s", chunk.String())
 				size, err := chunk.Size()
 				if err != nil {

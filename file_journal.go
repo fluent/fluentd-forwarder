@@ -356,9 +356,16 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
 				journal.addRef(prevChunk)
 			}
 			if visitor != nil {
+				// prevent the chunk from being
+				// destroyed when some error occurs
+				journal.addRef(lastChunk)
 				err = visitor(journal.newChunkWrapper(lastChunk))
 				if err != nil {
 					break
+				}
+				err, _ = journal.deleteRef(lastChunk)
+				if err != nil {
+					break // should never happen!
 				}
 			}
 			err, _ = journal.deleteRef(lastChunk)
