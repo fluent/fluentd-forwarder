@@ -57,6 +57,7 @@ type TDOutput struct {
 	isShuttingDown unsafe.Pointer
 	client         *td_client.TDClient
 	gcChan         chan *os.File
+	completion     sync.Cond
 }
 
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
@@ -323,13 +324,26 @@ func (output *TDOutput) Stop() {
 }
 
 func (output *TDOutput) WaitForShutdown() {
-	output.wg.Wait()
+	output.completion.L.Lock()
+	output.completion.Wait()
+	output.completion.L.Unlock()
 }
 
 func (output *TDOutput) Start() {
+	syncCh := make(chan struct{})
+	go func () {
+		<-syncCh
+		output.wg.Wait()
+		err := output.journalGroup.Dispose()
+		if err != nil {
+			output.logger.Error("%s", err.Error())
+		}
+		output.completion.Broadcast()
+	}()
 	output.spawnTempFileCollector()
 	output.spawnEmitter()
 	output.spawnSpoolerDaemon()
+	syncCh <- struct{}{}
 }
 
 func NewTDOutput(
@@ -394,17 +408,12 @@ func NewTDOutput(
 		tableName:      tableName,
 		tempDir:        tempDir,
 		gcChan:         make(chan *os.File, 10),
+		completion:     sync.Cond { L: &sync.Mutex {} },
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		err := journalGroup.Dispose()
-		if err != nil {
-			logger.Error("%#v", err)
-		}
-	}()
 	output.journalGroup = journalGroup
 	return output, nil
 }

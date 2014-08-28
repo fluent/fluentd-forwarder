@@ -33,6 +33,7 @@ type ForwardOutput struct {
 	emitterChan         chan FluentRecordSet
 	spoolerShutdownChan chan struct{}
 	isShuttingDown      unsafe.Pointer
+	completion          sync.Cond
 }
 
 func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
@@ -198,12 +199,25 @@ func (output *ForwardOutput) Stop() {
 }
 
 func (output *ForwardOutput) WaitForShutdown() {
-	output.wg.Wait()
+	output.completion.L.Lock()
+	output.completion.Wait()
+	output.completion.L.Unlock()
 }
 
 func (output *ForwardOutput) Start() {
+	syncCh := make(chan struct{})
+	go func() {
+		<-syncCh
+		output.wg.Wait()
+		err := output.journalGroup.Dispose()
+		if err != nil {
+			output.logger.Error("%s", err.Error())
+		}
+		output.completion.Broadcast()
+	}()
 	output.spawnSpooler()
 	output.spawnEmitter()
+	syncCh <- struct{}{}
 }
 
 func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Duration, connectionTimeout time.Duration, writeTimeout time.Duration, flushInterval time.Duration, journalGroupPath string, maxJournalChunkSize int64) (*ForwardOutput, error) {
@@ -232,17 +246,12 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		emitterChan:         make(chan FluentRecordSet),
 		spoolerShutdownChan: make(chan struct{}),
 		isShuttingDown:      unsafe.Pointer(uintptr(0)),
+		completion:          sync.Cond { L: &sync.Mutex {} },
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		err := journalGroup.Dispose()
-		if err != nil {
-			logger.Error("%#v", err)
-		}
-	}()
 	output.journalGroup = journalGroup
 	output.journal = journalGroup.GetJournal("output")
 	return output, nil
