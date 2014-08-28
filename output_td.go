@@ -186,6 +186,15 @@ func (daemon *tdOutputSpoolerDaemon) cleanup() {
 func (daemon *tdOutputSpoolerDaemon) handle() {
 	defer daemon.cleanup()
 	daemon.output.logger.Notice("Spooler daemon started")
+	// spawn Spooler according to the existing journals
+	for _, key := range daemon.output.journalGroup.GetJournalKeys() {
+		pair := strings.SplitN(key, ".", 2)
+		if len(pair) != 2 {
+			daemon.output.logger.Warning("Journal %s ignored", key)
+			continue
+		}
+		daemon.spawnSpooler(pair[0], pair[1], key)
+	}
 outer:
 	for {
 		select {
