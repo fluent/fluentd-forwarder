@@ -202,7 +202,6 @@ func (c *forwardClient) shutdown() {
 	if err != nil {
 		c.input.logger.Info("Error during closing connection: %s", err.Error())
 	}
-	c.conn = nil
 }
 
 func newForwardClient(input *ForwardInput, logger *logging.Logger, conn *net.TCPConn, _codec *codec.MsgpackHandle) *forwardClient {
