@@ -321,23 +321,9 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
 		// this is safe the journal lock prevents any new chunk from being added to the head
 		head := journal.chunks.first
 		if head != nil {
-			if head.Size != 0 {
-				_, err := journal.newChunk()
-				if err != nil {
-					return err
-				}
-			} else {
-				if journal.writer != nil {
-					err := journal.writer.Close()
-					if err != nil {
-						return err
-					}
-					journal.writer = nil
-				}
-				err, _ := journal.deleteRef(head) // writer-holding ref
-				if err != nil {
-					return err
-				}
+			_, err := journal.newChunk()
+			if err != nil {
+				return err
 			}
 		}
 		return nil
@@ -363,23 +349,21 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
 	}()
 	if lastChunk != nil {
 		prevChunk := (*FileJournalChunk)(nil)
-		if visitor != nil {
-			for ; lastChunk != nil; lastChunk = prevChunk {
-				prevChunk = lastChunk.head.prev
-				if prevChunk != nil {
-					journal.addRef(prevChunk)
-				}
+		for ; lastChunk != nil; lastChunk = prevChunk {
+			prevChunk = lastChunk.head.prev
+			if prevChunk != nil {
+				journal.addRef(prevChunk)
+			}
+			if visitor != nil {
 				err = visitor(journal.newChunkWrapper(lastChunk))
 				if err != nil {
 					break
 				}
-				err, _ = journal.deleteRef(lastChunk)
-				if err != nil {
-					break
-				}
 			}
-		} else {
 			err, _ = journal.deleteRef(lastChunk)
+			if err != nil {
+				break
+			}
 		}
 		if err != nil {
 			func() {
