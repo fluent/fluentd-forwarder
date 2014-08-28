@@ -246,7 +246,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		emitterChan:         make(chan FluentRecordSet),
 		spoolerShutdownChan: make(chan struct{}),
 		isShuttingDown:      unsafe.Pointer(uintptr(0)),
-		completion:          sync.Cond { L: &sync.Mutex {} },
+		completion:          sync.Cond{L: &sync.Mutex{}},
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {

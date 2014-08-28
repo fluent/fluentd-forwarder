@@ -38,7 +38,7 @@ type tdOutputSpoolerDaemon struct {
 	spoolers     map[string]*tdOutputSpooler
 	tempFactory  TempFileRandomAccessStoreFactory
 	wg           sync.WaitGroup
-	endNotify  func(*tdOutputSpoolerDaemon)
+	endNotify    func(*tdOutputSpoolerDaemon)
 }
 
 type TDOutput struct {
@@ -226,7 +226,7 @@ func newTDOutputSpoolerDaemon(output *TDOutput) *tdOutputSpoolerDaemon {
 		spoolers:     make(map[string]*tdOutputSpooler),
 		tempFactory:  TempFileRandomAccessStoreFactory{output.tempDir, "", output.gcChan},
 		wg:           sync.WaitGroup{},
-		endNotify:    func(*tdOutputSpoolerDaemon) {
+		endNotify: func(*tdOutputSpoolerDaemon) {
 			close(output.gcChan)
 		},
 	}
@@ -351,7 +351,7 @@ func (output *TDOutput) WaitForShutdown() {
 
 func (output *TDOutput) Start() {
 	syncCh := make(chan struct{})
-	go func () {
+	go func() {
 		<-syncCh
 		output.wg.Wait()
 		err := output.journalGroup.Dispose()
@@ -430,7 +430,7 @@ func NewTDOutput(
 		tableName:      tableName,
 		tempDir:        tempDir,
 		gcChan:         make(chan *os.File, 10),
-		completion:     sync.Cond { L: &sync.Mutex {} },
+		completion:     sync.Cond{L: &sync.Mutex{}},
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {

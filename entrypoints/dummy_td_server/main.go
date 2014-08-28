@@ -1,27 +1,27 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"github.com/ugorji/go/codec"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
-	"io"
-	"io/ioutil"
-	"fmt"
-	"encoding/hex"
-	"encoding/json"
-	"time"
-	"bytes"
-	"flag"
 	"regexp"
-	"crypto/md5"
-	"compress/gzip"
-	"github.com/ugorji/go/codec"
+	"time"
 )
 
 type DummyServerParams struct {
 	WriteTimeout time.Duration
-	ReadTimeout time.Duration
-	ListenOn string
+	ReadTimeout  time.Duration
+	ListenOn     string
 }
 
 var progName = os.Args[0]
@@ -34,7 +34,7 @@ func MustParseDuration(s string) time.Duration {
 	return d
 }
 
-func Error(fmtStr string, args... interface{}) {
+func Error(fmtStr string, args ...interface{}) {
 	fmt.Fprint(os.Stderr, progName, ": ")
 	fmt.Fprintf(os.Stderr, fmtStr, args...)
 	fmt.Fprint(os.Stderr, "\n")
@@ -52,10 +52,10 @@ func ParseArgs() *DummyServerParams {
 	flagSet.StringVar(&listenOn, "listen-on", "127.0.0.1:80", "interface address and port on which the dummy server listens")
 	flagSet.Parse(os.Args[1:])
 
-	return &DummyServerParams {
-		ReadTimeout: readTimeout,
+	return &DummyServerParams{
+		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
-		ListenOn: listenOn,
+		ListenOn:     listenOn,
 	}
 }
 
@@ -85,7 +85,7 @@ func handle(resp http.ResponseWriter, req *http.Request, matchparams map[string]
 	decoder := codec.NewDecoder(rdr, _codec)
 	numRecords := 0
 	for {
-		v := map[string]interface{} {}
+		v := map[string]interface{}{}
 		err := decoder.Decode(&v)
 		if err != nil {
 			if err == io.EOF {
@@ -102,11 +102,11 @@ func handle(resp http.ResponseWriter, req *http.Request, matchparams map[string]
 	md5sum := make([]byte, 0, h.Size())
 	md5sum = h.Sum(md5sum)
 	uniqueId, _ := matchparams["uniqueId"]
-	respData := map[string]interface{} {
-		"unique_id": uniqueId,
-		"database": matchparams["database"],
-		"table": matchparams["table"],
-		"md5_hex": hex.EncodeToString(md5sum),
+	respData := map[string]interface{}{
+		"unique_id":    uniqueId,
+		"database":     matchparams["database"],
+		"table":        matchparams["table"],
+		"md5_hex":      hex.EncodeToString(md5sum),
 		"elapsed_time": 0.,
 	}
 	payload, err := json.Marshal(respData)
@@ -134,7 +134,7 @@ func (mux *RegexpServeMux) Handle(pattern string, handler RegexpServeMuxHandler)
 	if err != nil {
 		return err
 	}
-	mux.entries = append(mux.entries, &regexpServeMuxEntry {
+	mux.entries = append(mux.entries, &regexpServeMuxEntry{
 		pattern: rex,
 		handler: handler,
 	})
@@ -142,7 +142,7 @@ func (mux *RegexpServeMux) Handle(pattern string, handler RegexpServeMuxHandler)
 }
 
 func (mux *RegexpServeMux) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	submatches := [][]byte {}
+	submatches := [][]byte{}
 	candidate := (*regexpServeMuxEntry)(nil)
 	for _, entry := range mux.entries {
 		submatches = entry.pattern.FindSubmatch([]byte(req.URL.Path))
@@ -155,7 +155,7 @@ func (mux *RegexpServeMux) ServeHTTP(resp http.ResponseWriter, req *http.Request
 		resp.WriteHeader(400)
 		return
 	}
-	matchparams := map[string]string {}
+	matchparams := map[string]string{}
 	for i, name := range candidate.pattern.SubexpNames() {
 		if submatches[i] != nil {
 			// XXX: assuming URL is encoded in UTF-8
@@ -165,8 +165,8 @@ func (mux *RegexpServeMux) ServeHTTP(resp http.ResponseWriter, req *http.Request
 	candidate.handler(resp, req, matchparams)
 }
 
-func newRegexpServeMux () *RegexpServeMux {
-	return &RegexpServeMux {
+func newRegexpServeMux() *RegexpServeMux {
+	return &RegexpServeMux{
 		entries: make([]*regexpServeMuxEntry, 0, 16),
 	}
 }
@@ -174,9 +174,13 @@ func newRegexpServeMux () *RegexpServeMux {
 func buildMux() *RegexpServeMux {
 	mux := newRegexpServeMux()
 	err := mux.Handle("^/v3/table/import_with_id/(?P<database>[^/]+)/(?P<table>[^/]+)/(?P<uniqueId>[^/]+)/(?P<format>[^/]+)$", handle)
-	if err != nil { panic(err.Error()) }
+	if err != nil {
+		panic(err.Error())
+	}
 	err = mux.Handle("^/v3/table/import/(?P<database>[^/]+)/(?P<table>[^/]+)/(?P<format>[^/]+)$", handle)
-	if err != nil { panic(err.Error()) }
+	if err != nil {
+		panic(err.Error())
+	}
 	return mux
 }
 
@@ -184,11 +188,11 @@ var mux = buildMux()
 
 func main() {
 	params := ParseArgs()
-	server := http.Server {
-		Addr: params.ListenOn,
-		ReadTimeout: params.ReadTimeout,
+	server := http.Server{
+		Addr:         params.ListenOn,
+		ReadTimeout:  params.ReadTimeout,
 		WriteTimeout: params.WriteTimeout,
-		Handler: mux,
+		Handler:      mux,
 	}
 	listener, err := net.Listen("tcp", params.ListenOn)
 	if err != nil {

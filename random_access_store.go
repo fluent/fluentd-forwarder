@@ -57,14 +57,18 @@ func NewSeekerWrapper(s RandomAccessStore) *SeekerWrapper {
 }
 
 type CloseHook struct {
-	c io.Closer
-	r io.Reader
-	w io.Writer
+	c  io.Closer
+	r  io.Reader
+	w  io.Writer
 	ra io.ReaderAt
 	wa io.WriterAt
 	sk io.Seeker
-	sz interface { Size() (int64, error) }
-	n interface { Name() string }
+	sz interface {
+		Size() (int64, error)
+	}
+	n interface {
+		Name() string
+	}
 	callback func(s io.Closer)
 }
 
@@ -126,23 +130,27 @@ func (c *CloseHook) Seek(offset int64, whence int) (int64, error) {
 	return c.sk.Seek(offset, whence)
 }
 
-func NewCloseHook(c io.Closer, callback func (s io.Closer)) *CloseHook {
+func NewCloseHook(c io.Closer, callback func(s io.Closer)) *CloseHook {
 	r, _ := c.(io.Reader)
 	w, _ := c.(io.Writer)
 	ra, _ := c.(io.ReaderAt)
 	wa, _ := c.(io.WriterAt)
 	sk, _ := c.(io.Seeker)
-	sz, _ := c.(interface { Size() (int64, error) })
-	n, _ := c.(interface { Name() string })
-	return &CloseHook {
-		c: c,
-		r: r,
-		w: w,
-		ra: ra,
-		wa: wa,
-		sk: sk,
-		sz: sz,
-		n: n,
+	sz, _ := c.(interface {
+		Size() (int64, error)
+	})
+	n, _ := c.(interface {
+		Name() string
+	})
+	return &CloseHook{
+		c:        c,
+		r:        r,
+		w:        w,
+		ra:       ra,
+		wa:       wa,
+		sk:       sk,
+		sz:       sz,
+		n:        n,
 		callback: callback,
 	}
 }
@@ -254,7 +262,7 @@ func (ras *TempFileRandomAccessStoreFactory) RandomAccessStore() (RandomAccessSt
 		c := ras.GCChan
 		f_ = NewCloseHook(
 			f_,
-			func (s io.Closer) {
+			func(s io.Closer) {
 				c <- s.(*os.File)
 			},
 		)

@@ -1,34 +1,34 @@
 package main
 
 import (
-	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
-	logging "github.com/op/go-logging"
 	"crypto/x509"
 	"flag"
-	"log"
-	"io/ioutil"
-	"os"
 	"fmt"
-	"time"
-	"strings"
+	logging "github.com/op/go-logging"
+	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
+	"io/ioutil"
+	"log"
 	"net/url"
+	"os"
+	"strings"
+	"time"
 )
 
 type FluentdForwarderParams struct {
-	RetryInterval time.Duration
-	ConnectionTimeout time.Duration
-	WriteTimeout time.Duration
-	FlushInterval time.Duration
-	JournalGroupPath string
+	RetryInterval       time.Duration
+	ConnectionTimeout   time.Duration
+	WriteTimeout        time.Duration
+	FlushInterval       time.Duration
+	JournalGroupPath    string
 	MaxJournalChunkSize int64
-	ListenOn string
-	OutputType string
-	ForwardTo string
-	LogLevel logging.Level
-	DatabaseName string
-	TableName string
-	ApiKey string
-	Ssl bool
+	ListenOn            string
+	OutputType          string
+	ForwardTo           string
+	LogLevel            logging.Level
+	DatabaseName        string
+	TableName           string
+	ApiKey              string
+	Ssl                 bool
 	SslCACertBundleFile string
 }
 
@@ -47,7 +47,7 @@ func MustParseDuration(s string) time.Duration {
 	return d
 }
 
-func Error(fmtStr string, args... interface{}) {
+func Error(fmtStr string, args ...interface{}) {
 	fmt.Fprint(os.Stderr, progName, ": ")
 	fmt.Fprintf(os.Stderr, fmtStr, args...)
 	fmt.Fprint(os.Stderr, "\n")
@@ -133,21 +133,21 @@ func ParseArgs() *FluentdForwarderParams {
 			forwardTo += ":24224"
 		}
 	}
-	return &FluentdForwarderParams {
-		RetryInterval: retryInterval,
-		ConnectionTimeout: connectionTimeout,
-		WriteTimeout: writeTimeout,
-		FlushInterval: flushInterval,
-		ListenOn: listenOn,
-		OutputType: outputType,
-		ForwardTo: forwardTo,
-		Ssl: ssl,
-		DatabaseName: databaseName,
-		TableName: tableName,
-		ApiKey: apiKey,
-		JournalGroupPath: journalGroupPath,
+	return &FluentdForwarderParams{
+		RetryInterval:       retryInterval,
+		ConnectionTimeout:   connectionTimeout,
+		WriteTimeout:        writeTimeout,
+		FlushInterval:       flushInterval,
+		ListenOn:            listenOn,
+		OutputType:          outputType,
+		ForwardTo:           forwardTo,
+		Ssl:                 ssl,
+		DatabaseName:        databaseName,
+		TableName:           tableName,
+		ApiKey:              apiKey,
+		JournalGroupPath:    journalGroupPath,
 		MaxJournalChunkSize: maxJournalChunkSize,
-		LogLevel: logging.Level(logLevel),
+		LogLevel:            logging.Level(logLevel),
 		SslCACertBundleFile: sslCACertBundleFile,
 	}
 }
@@ -204,7 +204,7 @@ func main() {
 			"",
 			params.Ssl,
 			rootCAs,
-			"", // TODO:http-proxy 
+			"", // TODO:http-proxy
 		)
 	}
 	if err != nil {

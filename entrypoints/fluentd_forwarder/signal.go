@@ -1,13 +1,13 @@
 package main
 
 import (
+	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
 	"os"
 	"os/signal"
-	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
 )
 
 type SignalHandler struct {
-	Workers *fluentd_forwarder.WorkerSet
+	Workers    *fluentd_forwarder.WorkerSet
 	signalChan chan os.Signal
 }
 
@@ -22,7 +22,7 @@ func (handler *SignalHandler) Start() {
 }
 
 func NewSignalHandler(workerSet *fluentd_forwarder.WorkerSet) *SignalHandler {
-	return &SignalHandler {
+	return &SignalHandler{
 		workerSet,
 		make(chan os.Signal, 1),
 	}
