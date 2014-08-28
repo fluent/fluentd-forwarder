@@ -3,6 +3,7 @@ package fluentd_forwarder
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/x509"
 	"errors"
 	logging "github.com/op/go-logging"
 	td_client "github.com/treasure-data/td-client-go"
@@ -379,6 +380,7 @@ func NewTDOutput(
 	tableName string,
 	tempDir string,
 	useSsl bool,
+	rootCAs *x509.CertPool,
 	httpProxy string,
 ) (*TDOutput, error) {
 	_codec := codec.MsgpackHandle{}
@@ -409,6 +411,7 @@ func NewTDOutput(
 		// ReadTimeout: readTimeout, // TODO
 		SendTimeout: writeTimeout,
 		Ssl:         useSsl,
+		RootCAs:     rootCAs,
 		Proxy:       httpProxy_,
 	})
 	if err != nil {

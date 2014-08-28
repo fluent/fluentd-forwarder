@@ -3,8 +3,10 @@ package main
 import (
 	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
 	logging "github.com/op/go-logging"
+	"crypto/x509"
 	"flag"
 	"log"
+	"io/ioutil"
 	"os"
 	"fmt"
 	"time"
@@ -27,6 +29,7 @@ type FluentdForwarderParams struct {
 	TableName string
 	ApiKey string
 	Ssl bool
+	SslCACertBundleFile string
 }
 
 type PortWorker interface {
@@ -72,6 +75,7 @@ func ParseArgs() *FluentdForwarderParams {
 	journalGroupPath := ""
 	maxJournalChunkSize := int64(16777216)
 	logLevel := LogLevelValue(logging.INFO)
+	sslCACertBundleFile := ""
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
@@ -84,6 +88,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.StringVar(&journalGroupPath, "buffer-path", "*", "directory / path on which buffer files are created. * may be used within the path to indicate the prefix or suffix like var/pre*suf")
 	flagSet.Int64Var(&maxJournalChunkSize, "buffer-chunk-limit", 16777216, "Maximum size of a buffer chunk")
 	flagSet.Var(&logLevel, "log-level", "log level (defaults to INFO)")
+	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
 	flagSet.Parse(os.Args[1:])
 
 	ssl := false
@@ -143,6 +148,7 @@ func ParseArgs() *FluentdForwarderParams {
 		JournalGroupPath: journalGroupPath,
 		MaxJournalChunkSize: maxJournalChunkSize,
 		LogLevel: logging.Level(logLevel),
+		SslCACertBundleFile: sslCACertBundleFile,
 	}
 }
 
@@ -170,6 +176,19 @@ func main() {
 			params.MaxJournalChunkSize,
 		)
 	case "td":
+		rootCAs := (*x509.CertPool)(nil)
+		if params.SslCACertBundleFile != "" {
+			b, err := ioutil.ReadFile(params.SslCACertBundleFile)
+			if err != nil {
+				Error("Failed to read CA bundle file: %s", err.Error())
+				os.Exit(1)
+			}
+			rootCAs = x509.NewCertPool()
+			if !rootCAs.AppendCertsFromPEM(b) {
+				Error("No valid certificate found in %s", params.SslCACertBundleFile)
+				os.Exit(1)
+			}
+		}
 		output, err = fluentd_forwarder.NewTDOutput(
 			logger,
 			params.ForwardTo,
@@ -184,11 +203,12 @@ func main() {
 			params.TableName,
 			"",
 			params.Ssl,
+			rootCAs,
 			"", // TODO:http-proxy 
 		)
 	}
 	if err != nil {
-		Error(err.Error())
+		Error("%s", err.Error())
 		return
 	}
 	workerSet.Add(output)

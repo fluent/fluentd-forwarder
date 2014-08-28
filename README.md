@@ -71,6 +71,15 @@ Command-line Options
   -to td+https://urlencoded-api-key@endpoint/*/*
   ```
 
+* -ca-certs
+
+  SSL CA certficates to be verified against when the secure connection is used. Must be in PEM format. You can use the [one bundled with td-client-ruby](https://raw.githubusercontent.com/treasure-data/td-client-ruby/master/data/ca-bundle.crt).
+
+  ```
+  -ca-certs ca-bundle.crt
+  ```
+
+
 * -buffer-path
 
   Directory / path on which buffer files are created. * may be used within the path to indicate the prefix or suffix like var/pre*suf
