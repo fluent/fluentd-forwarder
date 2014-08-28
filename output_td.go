@@ -187,6 +187,9 @@ func (daemon *tdOutputSpoolerDaemon) cleanup() {
 		}
 	}()
 	daemon.wg.Wait()
+	if daemon.endNotify != nil {
+		daemon.endNotify(daemon)
+	}
 	daemon.output.wg.Done()
 }
 
@@ -208,9 +211,6 @@ outer:
 		case <-daemon.shutdownChan:
 			break outer
 		}
-	}
-	if daemon.endNotify != nil {
-		daemon.endNotify(daemon)
 	}
 	daemon.output.logger.Notice("Spooler daemon ended")
 }
