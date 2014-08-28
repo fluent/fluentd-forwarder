@@ -2,6 +2,7 @@ package fluentd_forwarder
 
 import (
 	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	logging "github.com/op/go-logging"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"encoding/hex"
 	"time"
 	"unsafe"
 )
@@ -675,13 +675,14 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 		return nil, errors.New(fmt.Sprintf("%s is not a directory", dirname))
 	}
 	for {
-		files_, err := d.Readdirnames(100)
+		files_, err := d.Readdir(100)
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, err
 		}
-		for _, file := range files_ {
+		for _, finfo := range files_ {
+			file := finfo.Name()
 			if !strings.HasSuffix(file, pathSuffix) {
 				continue
 			}
@@ -707,6 +708,7 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 				TSuffix:   info.TSuffix,
 				Timestamp: info.Timestamp,
 				UniqueId:  info.UniqueId,
+				Size:      finfo.Size(),
 				refcount:  1,
 			}
 			if journalProto.chunks.last == nil {
