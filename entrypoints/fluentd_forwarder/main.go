@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"runtime/pprof"
 	"strings"
 	"time"
 )
@@ -30,6 +31,7 @@ type FluentdForwarderParams struct {
 	ApiKey              string
 	Ssl                 bool
 	SslCACertBundleFile string
+	CPUProfileFile      string
 }
 
 type PortWorker interface {
@@ -76,6 +78,7 @@ func ParseArgs() *FluentdForwarderParams {
 	maxJournalChunkSize := int64(16777216)
 	logLevel := LogLevelValue(logging.INFO)
 	sslCACertBundleFile := ""
+	cpuProfileFile := ""
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
@@ -89,6 +92,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.Int64Var(&maxJournalChunkSize, "buffer-chunk-limit", 16777216, "Maximum size of a buffer chunk")
 	flagSet.Var(&logLevel, "log-level", "log level (defaults to INFO)")
 	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
+	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
 	flagSet.Parse(os.Args[1:])
 
 	ssl := false
@@ -149,6 +153,7 @@ func ParseArgs() *FluentdForwarderParams {
 		MaxJournalChunkSize: maxJournalChunkSize,
 		LogLevel:            logging.Level(logLevel),
 		SslCACertBundleFile: sslCACertBundleFile,
+		CPUProfileFile:      cpuProfileFile,
 	}
 }
 
@@ -160,6 +165,16 @@ func main() {
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
 
 	workerSet := fluentd_forwarder.NewWorkerSet()
+
+	if params.CPUProfileFile != "" {
+		f, err := os.Create(params.CPUProfileFile)
+		if err != nil {
+			Error(err.Error())
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	output := (PortWorker)(nil)
 	err := (error)(nil)
@@ -218,10 +233,12 @@ func main() {
 		return
 	}
 	workerSet.Add(input)
+
 	signalHandler := NewSignalHandler(workerSet)
 	input.Start()
 	output.Start()
 	signalHandler.Start()
+
 	for _, worker := range workerSet.Slice() {
 		worker.WaitForShutdown()
 	}
