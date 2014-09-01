@@ -1,6 +1,7 @@
 package fluentd_forwarder
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	logging "github.com/op/go-logging"
@@ -53,7 +54,7 @@ func coerceInPlace(data map[string]interface{}) {
 	}
 }
 
-func decodeRecordSet(tag []byte, entries []interface{}) (FluentRecordSet, error) {
+func (c *forwardClient) decodeRecordSet(tag []byte, entries []interface{}) (FluentRecordSet, error) {
 	records := make([]TinyFluentRecord, len(entries))
 	for i, _entry := range entries {
 		entry, ok := _entry.([]interface{})
@@ -132,7 +133,7 @@ func (c *forwardClient) decodeEntries() ([]FluentRecordSet, error) {
 		if !ok {
 			return nil, errors.New("Unexpected payload format")
 		}
-		recordSet, err := decodeRecordSet(tag, timestamp_or_entries)
+		recordSet, err := c.decodeRecordSet(tag, timestamp_or_entries)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +144,7 @@ func (c *forwardClient) decodeEntries() ([]FluentRecordSet, error) {
 		if err != nil {
 			return nil, err
 		}
-		recordSet, err := decodeRecordSet(tag, entries)
+		recordSet, err := c.decodeRecordSet(tag, entries)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +211,7 @@ func newForwardClient(input *ForwardInput, logger *logging.Logger, conn *net.TCP
 		logger: logger,
 		conn:   conn,
 		codec:  _codec,
-		dec:    codec.NewDecoder(conn, _codec),
+		dec:    codec.NewDecoder(bufio.NewReader(conn), _codec),
 	}
 	input.markCharged(c)
 	return c
