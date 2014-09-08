@@ -67,7 +67,7 @@ func (v *LogLevelValue) Set(s string) error {
 	return err
 }
 
-func ParseArgs() *FluentdForwarderParams {
+func ParseArgs(args []string) *FluentdForwarderParams {
 	retryInterval := (time.Duration)(0)
 	connectionTimeout := (time.Duration)(0)
 	writeTimeout := (time.Duration)(0)
@@ -93,7 +93,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.Var(&logLevel, "log-level", "log level (defaults to INFO)")
 	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
 	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
-	flagSet.Parse(os.Args[1:])
+	flagSet.Parse(args)
 
 	ssl := false
 	outputType := ""
@@ -158,10 +158,14 @@ func ParseArgs() *FluentdForwarderParams {
 }
 
 func main() {
+	serviceDispatch("fluentd-forwarder", RealMain)
+}
+
+func RealMain(args []string, notifyStarted func()) {
 	logBackend := logging.NewLogBackend(os.Stderr, "[fluentd-forwarder] ", log.Ltime)
 	logging.SetBackend(logBackend)
 	logger := logging.MustGetLogger("fluentd-forwarder")
-	params := ParseArgs()
+	params := ParseArgs(args)
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
 
 	workerSet := fluentd_forwarder.NewWorkerSet()
@@ -238,6 +242,8 @@ func main() {
 	input.Start()
 	output.Start()
 	signalHandler.Start()
+
+	notifyStarted()
 
 	for _, worker := range workerSet.Slice() {
 		worker.WaitForShutdown()
