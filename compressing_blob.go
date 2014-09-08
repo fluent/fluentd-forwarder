@@ -151,19 +151,26 @@ func (reader *CompressingBlobReader) size() (int64, error) {
 func (reader *CompressingBlobReader) Close() error {
 	err1 := (error)(nil)
 	err2 := (error)(nil)
+	err3 := (error)(nil)
 	if reader.cw != nil {
 		err1 = reader.cw.Close()
 		if err1 != nil {
 			reader.cw = nil
 		}
 	}
-	if reader.s != nil {
-		err2 = reader.s.Close()
+	if reader.src != nil {
+		err2 = reader.src.Close()
 		if err2 != nil {
+			reader.src = nil
+		}
+	}
+	if reader.s != nil {
+		err3 = reader.s.Close()
+		if err3 != nil {
 			reader.s = nil
 		}
 	}
-	if err1 != nil || err2 != nil {
+	if err1 != nil || err2 != nil || err3 != nil {
 		return errors.New("Close() failed") // XXX
 	}
 	reader.closeNotify(reader)
