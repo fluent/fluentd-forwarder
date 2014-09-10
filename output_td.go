@@ -26,7 +26,6 @@ type tdOutputSpooler struct {
 	tableName      string
 	key            string
 	journal        Journal
-	wg             sync.WaitGroup
 	shutdownChan   chan struct{}
 	isShuttingDown unsafe.Pointer
 	client         *td_client.TDClient
@@ -78,7 +77,6 @@ func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
 }
 
 func (spooler *tdOutputSpooler) cleanup() {
-	spooler.wg.Wait()
 	spooler.ticker.Stop()
 	spooler.journal.Dispose()
 	spooler.daemon.wg.Done()
@@ -106,18 +104,12 @@ outer:
 					return nil
 				}
 				futureErr := make(chan error, 1)
-				spooler.wg.Add(1)
 				sem := spooler.daemon.output.sem
 				sem <- struct{}{}
 				go func(size int64, chunk JournalChunk, futureErr chan error) {
 					defer func() {
 						<-sem
 						chunk.Dispose()
-						spooler.wg.Done()
-						x := recover()
-						if x != nil {
-							futureErr <- &Panicked{x}
-						}
 					}()
 					_, err = spooler.client.Import(
 						spooler.databaseName,
@@ -187,7 +179,6 @@ func newTDOutputSpooler(daemon *tdOutputSpoolerDaemon, databaseName, tableName, 
 		tableName:    tableName,
 		key:          key,
 		journal:      journal,
-		wg:           sync.WaitGroup{},
 		shutdownChan: make(chan struct{}, 1),
 		client:       daemon.output.client,
 	}
