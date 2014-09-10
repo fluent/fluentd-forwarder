@@ -1,6 +1,7 @@
 package fluentd_forwarder
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -43,6 +44,7 @@ type JournalChunk interface {
 	Reader() (io.ReadCloser, error)
 	NextChunk() JournalChunk
 	MD5Sum() ([]byte, error)
+	Dup() JournalChunk
 }
 
 type JournalChunkListener interface {
@@ -57,7 +59,7 @@ type Journal interface {
 	TailChunk() JournalChunk
 	AddNewChunkListener(JournalChunkListener)
 	AddFlushListener(JournalChunkListener)
-	Flush(func(JournalChunk) error) error
+	Flush(func(JournalChunk) interface{}) error
 }
 
 type JournalGroup interface {
@@ -68,4 +70,16 @@ type JournalGroup interface {
 
 type JournalGroupFactory interface {
 	GetJournalGroup() JournalGroup
+}
+
+type Panicked struct {
+	Opaque interface{}
+}
+
+func (e *Panicked) Error() string {
+	s, ok := e.Opaque.(string)
+	if ok {
+		return s
+	}
+	return fmt.Sprintf("%v", e.Opaque)
 }

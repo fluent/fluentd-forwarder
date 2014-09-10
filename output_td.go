@@ -26,9 +26,10 @@ type tdOutputSpooler struct {
 	tableName      string
 	key            string
 	journal        Journal
-	client         *td_client.TDClient
+	wg             sync.WaitGroup
 	shutdownChan   chan struct{}
 	isShuttingDown unsafe.Pointer
+	client         *td_client.TDClient
 }
 
 type tdOutputSpoolerDaemon struct {
@@ -57,6 +58,7 @@ type TDOutput struct {
 	spoolerDaemon  *tdOutputSpoolerDaemon
 	isShuttingDown unsafe.Pointer
 	client         *td_client.TDClient
+	sem            chan struct{}
 	gcChan         chan *os.File
 	completion     sync.Cond
 }
@@ -76,6 +78,7 @@ func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
 }
 
 func (spooler *tdOutputSpooler) cleanup() {
+	spooler.wg.Wait()
 	spooler.ticker.Stop()
 	spooler.journal.Dispose()
 	spooler.daemon.wg.Done()
@@ -89,7 +92,7 @@ outer:
 		select {
 		case <-spooler.ticker.C:
 			spooler.daemon.output.logger.Notice("Flushing...")
-			err := spooler.journal.Flush(func(chunk JournalChunk) error {
+			err := spooler.journal.Flush(func(chunk JournalChunk) interface{} {
 				defer chunk.Dispose()
 				if atomic.LoadPointer(&spooler.isShuttingDown) != unsafe.Pointer(uintptr(0)) {
 					return errors.New("Flush aborted")
@@ -102,19 +105,40 @@ outer:
 				if size == 0 {
 					return nil
 				}
-				_, err = spooler.client.Import(
-					spooler.databaseName,
-					spooler.tableName,
-					"msgpack.gz",
-					NewCompressingBlob(
-						chunk,
-						16777216,
-						gzip.BestSpeed,
-						&spooler.daemon.tempFactory,
-					),
-					chunk.Id(),
-				)
-				return err
+				futureErr := make(chan error, 1)
+				spooler.wg.Add(1)
+				sem := spooler.daemon.output.sem
+				sem <- struct{}{}
+				go func(chunk JournalChunk, futureErr chan error) {
+					defer func() {
+						<-sem
+						chunk.Dispose()
+						spooler.wg.Done()
+						x := recover()
+						if x != nil {
+							futureErr <- &Panicked{x}
+						}
+					}()
+					_, err = spooler.client.Import(
+						spooler.databaseName,
+						spooler.tableName,
+						"msgpack.gz",
+						NewCompressingBlob(
+							chunk,
+							16777216,
+							gzip.BestSpeed,
+							&spooler.daemon.tempFactory,
+						),
+						chunk.Id(),
+					)
+					futureErr <- err
+					if err != nil {
+						spooler.daemon.output.logger.Info("Failed to flush chunk %s (reason: %s)", chunk.String(), err.Error())
+					} else {
+						spooler.daemon.output.logger.Info("Completed flushing chunk %s", chunk.String())
+					}
+				}(chunk.Dup(), futureErr)
+				return (<-chan error)(futureErr)
 			})
 			if err != nil {
 				spooler.daemon.output.logger.Error("Error during reading from the journal: %s", err.Error())
@@ -160,6 +184,7 @@ func newTDOutputSpooler(daemon *tdOutputSpoolerDaemon, databaseName, tableName, 
 		tableName:    tableName,
 		key:          key,
 		journal:      journal,
+		wg:           sync.WaitGroup{},
 		shutdownChan: make(chan struct{}, 1),
 		client:       daemon.output.client,
 	}
@@ -373,6 +398,7 @@ func NewTDOutput(
 	connectionTimeout time.Duration,
 	writeTimeout time.Duration,
 	flushInterval time.Duration,
+	parallelism int,
 	journalGroupPath string,
 	maxJournalChunkSize int64,
 	apiKey string,
@@ -429,6 +455,7 @@ func NewTDOutput(
 		databaseName:   databaseName,
 		tableName:      tableName,
 		tempDir:        tempDir,
+		sem:            make(chan struct{}, parallelism),
 		gcChan:         make(chan *os.File, 10),
 		completion:     sync.Cond{L: &sync.Mutex{}},
 	}

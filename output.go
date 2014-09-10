@@ -116,7 +116,7 @@ func (output *ForwardOutput) spawnSpooler() {
 			case <-ticker.C:
 				buf := make([]byte, 16777216)
 				output.logger.Notice("Flushing...")
-				err := output.journal.Flush(func(chunk JournalChunk) error {
+				err := output.journal.Flush(func(chunk JournalChunk) interface{} {
 					defer chunk.Dispose()
 					output.logger.Info("Flushing chunk %s", chunk.String())
 					reader, err := chunk.Reader()

@@ -533,7 +533,7 @@ func Test_Journal_Concurrency(t *testing.T) {
 	count := int64(0)
 	outerWg := sync.WaitGroup{}
 	doFlush := func() {
-		journal.Flush(func(chunk JournalChunk) error {
+		journal.Flush(func(chunk JournalChunk) interface{} {
 			defer chunk.Dispose()
 			reader, err := chunk.Reader()
 			if err != nil {

@@ -1,6 +1,8 @@
 fluentd-forwarder
 =================
 
+Lightweight fluentd forwarder written in Go.
+
 Build Instructions
 ------------------
 
@@ -12,8 +14,22 @@ $ go get github.com/treasure-data/fluentd-forwarder/entrypoints/fluentd_forwarde
 ```
 (beware of the last component of the URL having an underscore instead of a hyphen)
 
+Running `fluentd\_forwarder`
+----------------------------
+
+```
+$ $GOPATH/bin/fluentd_forwarder
+```
+
+Without arguments, it simply listens on 127.0.0.1:24224 and forwards the events to 127.0.0.1:24225.
+
 It gracefully stops in response to SIGINT.
 
+If you want to specify where to forward the events, try the following:
+
+```
+$ $GOPATH/bin/fluentd_forwarder -to fluent://some-remote-node.local:24224
+```
 
 Command-line Options
 --------------------
@@ -96,6 +112,10 @@ Command-line Options
   ```
   -buffer-chunk-limit 16777216
   ```
+
+* -parallelism
+
+  Number of simultaneous connections used to submit events. It takes effect only when the target is td+http(s).
 
 * -log-level
 

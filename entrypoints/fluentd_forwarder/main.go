@@ -20,6 +20,7 @@ type FluentdForwarderParams struct {
 	ConnectionTimeout   time.Duration
 	WriteTimeout        time.Duration
 	FlushInterval       time.Duration
+	Parallelism         int
 	JournalGroupPath    string
 	MaxJournalChunkSize int64
 	ListenOn            string
@@ -72,6 +73,7 @@ func ParseArgs() *FluentdForwarderParams {
 	connectionTimeout := (time.Duration)(0)
 	writeTimeout := (time.Duration)(0)
 	flushInterval := (time.Duration)(0)
+	parallelism := 0
 	listenOn := ""
 	forwardTo := ""
 	journalGroupPath := ""
@@ -86,6 +88,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.DurationVar(&connectionTimeout, "conn-timeout", MustParseDuration("10s"), "connection timeout")
 	flagSet.DurationVar(&writeTimeout, "write-timeout", MustParseDuration("10s"), "write timeout on wire")
 	flagSet.DurationVar(&flushInterval, "flush-interval", MustParseDuration("5s"), "flush interval in which the events are forwareded to the remote agent")
+	flagSet.IntVar(&parallelism, "parallelism", 1, "Number of chunks to submit at once (for td output)")
 	flagSet.StringVar(&listenOn, "listen-on", "127.0.0.1:24224", "interface address and port on which the forwarder listens")
 	flagSet.StringVar(&forwardTo, "to", "fluent://127.0.0.1:24225", "host and port to which the events are forwarded")
 	flagSet.StringVar(&journalGroupPath, "buffer-path", "*", "directory / path on which buffer files are created. * may be used within the path to indicate the prefix or suffix like var/pre*suf")
@@ -142,6 +145,7 @@ func ParseArgs() *FluentdForwarderParams {
 		ConnectionTimeout:   connectionTimeout,
 		WriteTimeout:        writeTimeout,
 		FlushInterval:       flushInterval,
+		Parallelism:         parallelism,
 		ListenOn:            listenOn,
 		OutputType:          outputType,
 		ForwardTo:           forwardTo,
@@ -211,6 +215,7 @@ func main() {
 			params.ConnectionTimeout,
 			params.WriteTimeout,
 			params.FlushInterval,
+			params.Parallelism,
 			params.JournalGroupPath,
 			params.MaxJournalChunkSize,
 			params.ApiKey,

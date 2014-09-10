@@ -31,6 +31,7 @@ type FileJournalChunkDequeue struct {
 
 type FileJournalChunk struct {
 	head      FileJournalChunkDequeueHead
+	container *FileJournalChunkDequeue
 	Path      string
 	Type      JournalFileType
 	TSuffix   string
@@ -147,19 +148,15 @@ func (wrapper *FileJournalChunkWrapper) Dispose() error {
 	if chunk == nil {
 		return errors.New("already disposed")
 	}
-	err, destroyed := wrapper.journal.deleteRef((*FileJournalChunk)(chunk))
-	if err != nil {
-		return err
+	return wrapper.journal.deleteRef((*FileJournalChunk)(chunk))
+}
+
+func (wrapper *FileJournalChunkWrapper) Dup() JournalChunk {
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	if chunk == nil {
+		return nil
 	}
-	if destroyed && chunk.head.next == nil {
-		// increment the refcount of the last chunk
-		// to rehold the reference
-		prevChunk := chunk.head.prev
-		if prevChunk != nil {
-			wrapper.journal.addRef(prevChunk)
-		}
-	}
-	return nil
+	return wrapper.journal.newChunkWrapper(chunk)
 }
 
 func (journal *FileJournal) newChunkWrapper(chunk *FileJournalChunk) *FileJournalChunkWrapper {
@@ -171,55 +168,42 @@ func (journal *FileJournal) addRef(chunk *FileJournalChunk) int32 {
 	return atomic.AddInt32(&chunk.refcount, 1)
 }
 
-func (journal *FileJournal) deleteRef(chunk *FileJournalChunk) (error, bool) {
+func (journal *FileJournal) deleteRef(chunk *FileJournalChunk) error {
 	refcount := atomic.AddInt32(&chunk.refcount, -1)
 	if refcount == 0 {
-		// first propagate to newer chunk
-		if prevChunk := chunk.head.prev; prevChunk != nil {
-			err, _ := journal.deleteRef(prevChunk)
-			if err != nil {
-				// undo the change
-				atomic.AddInt32(&chunk.refcount, 1)
-				return err, false
-			}
-		}
 		chunk.mtx.Lock()
 		defer chunk.mtx.Unlock()
-		journal.chunks.mtx.Lock()
-		defer journal.chunks.mtx.Unlock()
+		chunk.container.mtx.Lock()
+		defer chunk.container.mtx.Unlock()
 		err := os.Remove(chunk.Path)
 		if err != nil {
 			// undo the change
 			atomic.AddInt32(&chunk.refcount, 1)
-			return err, false
+			return err
 		}
 		{
 			prevChunk := chunk.head.prev
 			nextChunk := chunk.head.next
-			if journal.chunks.first == chunk {
-				journal.chunks.first = nextChunk
-			} else {
-				if prevChunk != nil {
-					prevChunk.head.next = nextChunk
-				}
+			if prevChunk != nil {
+				prevChunk.head.next = nextChunk
+			} else if chunk.container.first == chunk {
+				chunk.container.first = nextChunk
 			}
-			if journal.chunks.last == chunk {
-				journal.chunks.last = prevChunk
-			} else {
-				if nextChunk != nil {
-					nextChunk.head.prev = prevChunk
-				}
+			if nextChunk != nil {
+				nextChunk.head.prev = prevChunk
+			} else if chunk.container.last == chunk {
+				chunk.container.last = prevChunk
 			}
 			chunk.head.prev = nil
 			chunk.head.next = nil
-			journal.chunks.count -= 1
+			chunk.container.count -= 1
 		}
-		return nil, true
+		return nil
 	} else if refcount < 0 {
 		// should never happen
-		panic(fmt.Sprintf("something went wrong! chunk=%s, chunks.count=%d", chunk.Path, journal.chunks.count))
+		panic(fmt.Sprintf("something went wrong! chunk=%s, chunks.count=%d", chunk.Path, chunk.container.count))
 	}
-	return nil, false
+	return nil
 }
 
 func (chunk *FileJournalChunk) getReader() (io.ReadCloser, error) {
@@ -260,8 +244,8 @@ func (chunk *FileJournalChunk) md5Sum() ([]byte, error) {
 }
 
 func (chunk *FileJournalChunk) getNextChunk(journal *FileJournal) *FileJournalChunk {
-	journal.chunks.mtx.Lock()
-	defer journal.chunks.mtx.Unlock()
+	chunk.container.mtx.Lock()
+	defer chunk.container.mtx.Unlock()
 	return chunk.head.prev
 }
 
@@ -315,7 +299,7 @@ func (journal *FileJournal) finalizeChunk(chunk *FileJournalChunk) error {
 	return nil
 }
 
-func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
+func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error {
 	err := func() error {
 		journal.mtx.Lock()
 		defer journal.mtx.Unlock()
@@ -332,57 +316,111 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) error) error {
 	if err != nil {
 		return err
 	}
-	nextOfFirstChunk, lastChunk := func() (*FileJournalChunk, *FileJournalChunk) {
+	dequeue := func() *FileJournalChunkDequeue {
 		journal.chunks.mtx.Lock()
 		defer journal.chunks.mtx.Unlock()
-		// detach all the leading chunks
+		// detach all the following chunks
 		firstChunk := journal.chunks.first
 		lastChunk := journal.chunks.last
 		if firstChunk != lastChunk {
 			nextOfFirstChunk := firstChunk.head.next
-			nextOfFirstChunk.head.prev = nil
+			dequeue := &FileJournalChunkDequeue{
+				first: nextOfFirstChunk,
+				last:  lastChunk,
+				count: journal.chunks.count - 1,
+			}
 			firstChunk.head.next = nil
+			nextOfFirstChunk.head.prev = nil
 			journal.chunks.last = journal.chunks.first
-			return nextOfFirstChunk, lastChunk
-		} else {
-			return nil, nil
+			journal.chunks.count = 1
+			for chunk := nextOfFirstChunk; chunk != nil; chunk = chunk.head.next {
+				chunk.container = dequeue
+			}
+			return dequeue
 		}
+		return nil
 	}()
-	if lastChunk != nil {
-		prevChunk := (*FileJournalChunk)(nil)
-		for ; lastChunk != nil; lastChunk = prevChunk {
-			prevChunk = lastChunk.head.prev
-			if prevChunk != nil {
-				journal.addRef(prevChunk)
-			}
-			if visitor != nil {
-				// prevent the chunk from being
-				// destroyed when some error occurs
-				journal.addRef(lastChunk)
-				err = visitor(journal.newChunkWrapper(lastChunk))
-				if err != nil {
-					break
+	if dequeue != nil {
+		journal.group.logger.Debug("chunks to flush: %d", dequeue.count)
+		type pair struct {
+			chunk     *FileJournalChunk
+			futureErr <-chan error
+		}
+		if visitor != nil {
+			pairs := make([]pair, 0, dequeue.count)
+			prevChunk := (*FileJournalChunk)(nil)
+			for chunk := dequeue.last; chunk != nil; chunk = prevChunk {
+				prevChunk = chunk.head.prev
+				errOrFuture := visitor(journal.newChunkWrapper(chunk))
+				if errOrFuture != nil {
+					// either synchronous or asynchronous
+					var ok bool
+					var futureErr <-chan error
+					err, ok = errOrFuture.(error)
+					if ok {
+						// synchronous
+						futureErr := make(chan error, 1)
+						futureErr <- err
+					} else {
+						// asynchrnous
+						futureErr, ok = errOrFuture.(<-chan error)
+						if !ok {
+							panic("visitor returned something that is neither an error or channel")
+						}
+					}
+					pairs = append(pairs, pair{chunk, futureErr})
+				} else {
+					// synchronous mode
+					err = journal.deleteRef(chunk)
+					if err != nil {
+						futureErr := make(chan error, 1)
+						futureErr <- err
+						pairs = append(pairs, pair{chunk, futureErr})
+					}
+
 				}
-				err, _ = journal.deleteRef(lastChunk)
+			}
+			errors := make(Errors, 0, len(pairs))
+			for _, p := range pairs {
+				err := <-p.futureErr
 				if err != nil {
-					break // should never happen!
+					errors = append(errors, err)
+				} else {
+					err = journal.deleteRef(p.chunk)
+					if err != nil {
+						errors = append(errors, err)
+					}
 				}
 			}
-			err, _ = journal.deleteRef(lastChunk)
-			if err != nil {
-				break
+			journal.group.logger.Debug("errors=%d, chunks=%d", len(errors), dequeue.count)
+			if len(errors) > 0 {
+				err = errors
+			}
+		} else {
+			prevChunk := (*FileJournalChunk)(nil)
+			for chunk := dequeue.last; chunk != nil; chunk = prevChunk {
+				prevChunk = chunk.head.prev
+				journal.deleteRef(chunk)
 			}
 		}
-		if err != nil {
-			func() {
-				// re-attach chunks
-				journal.chunks.mtx.Lock()
-				defer journal.chunks.mtx.Unlock()
-				journal.chunks.last.head.next = nextOfFirstChunk
-				nextOfFirstChunk.head.prev = journal.chunks.last
-				journal.chunks.last = lastChunk
-			}()
-		}
+		func() {
+			// re-attach chunks
+			journal.chunks.mtx.Lock()
+			defer journal.chunks.mtx.Unlock()
+			for chunk := dequeue.last; chunk != nil; chunk = chunk.head.prev {
+				chunk.container = &journal.chunks
+			}
+			if journal.chunks.last != nil {
+				journal.chunks.last.head.next = dequeue.first
+			} else {
+				journal.chunks.first = dequeue.first
+			}
+			if dequeue.first != nil {
+				dequeue.first.head.prev = journal.chunks.last
+				journal.chunks.last = dequeue.last
+			}
+			journal.chunks.count += dequeue.count
+		}()
 	}
 	return err
 }
@@ -396,12 +434,13 @@ func (journal *FileJournal) newChunk() (*FileJournalChunk, error) {
 		group.rand.Int63n(0xfff),
 	)
 	chunk := &FileJournalChunk{
-		head:     FileJournalChunkDequeueHead{journal.chunks.first, nil},
-		Path:     (group.pathPrefix + info.VariablePortion + group.pathSuffix),
-		Type:     info.Type,
-		TSuffix:  info.TSuffix,
-		UniqueId: info.UniqueId,
-		refcount: 1,
+		head:      FileJournalChunkDequeueHead{journal.chunks.first, nil},
+		container: &journal.chunks,
+		Path:      (group.pathPrefix + info.VariablePortion + group.pathSuffix),
+		Type:      info.Type,
+		TSuffix:   info.TSuffix,
+		UniqueId:  info.UniqueId,
+		refcount:  1,
 	}
 	file, err := os.OpenFile(chunk.Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_EXCL, journal.group.fileMode)
 	if err != nil {
@@ -438,7 +477,7 @@ func (journal *FileJournal) newChunk() (*FileJournalChunk, error) {
 			os.Remove(chunk.Path)
 			return nil, err
 		}
-		err, _ = journal.deleteRef(oldHead) // writer-holding ref
+		err = journal.deleteRef(oldHead) // writer-holding ref
 		if err != nil {
 			file.Close()
 			os.Remove(chunk.Path)
@@ -516,7 +555,7 @@ func (journal *FileJournal) Dispose() error {
 		}
 		journal.writer = nil
 		if journal.chunks.first != nil {
-			err, _ := journal.deleteRef(journal.chunks.first)
+			err := journal.deleteRef(journal.chunks.first)
 			if err != nil {
 				return err
 			}
@@ -703,6 +742,7 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 			}
 			chunk := &FileJournalChunk{
 				head:      FileJournalChunkDequeueHead{nil, journalProto.chunks.last},
+				container: &journalProto.chunks,
 				Type:      info.Type,
 				Path:      pathPrefix + info.VariablePortion + pathSuffix,
 				TSuffix:   info.TSuffix,
