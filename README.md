@@ -117,6 +117,10 @@ Command-line Options
 
   Number of simultaneous connections used to submit events. It takes effect only when the target is td+http(s).
 
+  ```
+  -parallelism 1
+  ```
+
 * -log-level
 
   Logging level. Any one of the following values; CRITICAL, ERROR, WARNING, NOTICE, INFO and DEBUG.
