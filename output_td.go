@@ -63,6 +63,14 @@ type TDOutput struct {
 	completion     sync.Cond
 }
 
+func maxInt(a, b int) int {
+	if a >= b {
+		return a
+	} else {
+		return b
+	}
+}
+
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
 	for _, record := range records {
 		e := map[string]interface{}{"time": record.Timestamp}
@@ -109,7 +117,7 @@ outer:
 				spooler.wg.Add(1)
 				sem := spooler.daemon.output.sem
 				sem <- struct{}{}
-				go func(chunk JournalChunk, futureErr chan error) {
+				go func(size int64, chunk JournalChunk, futureErr chan error) {
 					defer func() {
 						<-sem
 						chunk.Dispose()
@@ -123,11 +131,14 @@ outer:
 						spooler.databaseName,
 						spooler.tableName,
 						"msgpack.gz",
-						NewCompressingBlob(
-							chunk,
-							16777216,
-							gzip.BestSpeed,
-							&spooler.daemon.tempFactory,
+						td_client.NewBufferingBlobSize(
+							NewCompressingBlob(
+								chunk,
+								16777216,
+								gzip.BestSpeed,
+								&spooler.daemon.tempFactory,
+							),
+							maxInt(4096, int(size/16)),
 						),
 						chunk.Id(),
 					)
@@ -137,7 +148,7 @@ outer:
 					} else {
 						spooler.daemon.output.logger.Info("Completed flushing chunk %s", chunk.String())
 					}
-				}(chunk.Dup(), futureErr)
+				}(size, chunk.Dup(), futureErr)
 				return (<-chan error)(futureErr)
 			})
 			if err != nil {
