@@ -134,7 +134,7 @@ outer:
 						td_client.NewBufferingBlobSize(
 							NewCompressingBlob(
 								chunk,
-								16777216,
+								maxInt(4096, int(size/4)),
 								gzip.BestSpeed,
 								&spooler.daemon.tempFactory,
 							),
