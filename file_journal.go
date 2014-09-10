@@ -359,8 +359,9 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 					err, ok = errOrFuture.(error)
 					if ok {
 						// synchronous
-						futureErr := make(chan error, 1)
-						futureErr <- err
+						_futureErr := make(chan error, 1)
+						_futureErr <- err
+						futureErr = _futureErr
 					} else {
 						// asynchrnous
 						futureErr, ok = errOrFuture.(<-chan error)
