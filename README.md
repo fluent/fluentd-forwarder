@@ -14,8 +14,8 @@ $ go get github.com/treasure-data/fluentd-forwarder/entrypoints/fluentd_forwarde
 ```
 (beware of the last component of the URL having an underscore instead of a hyphen)
 
-Running `fluentd\_forwarder`
-----------------------------
+Running `fluentd_forwarder`
+---------------------------
 
 ```
 $ $GOPATH/bin/fluentd_forwarder
