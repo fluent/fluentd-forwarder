@@ -63,14 +63,6 @@ type TDOutput struct {
 	completion     sync.Cond
 }
 
-func maxInt(a, b int) int {
-	if a >= b {
-		return a
-	} else {
-		return b
-	}
-}
-
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
 	for _, record := range records {
 		e := map[string]interface{}{"time": record.Timestamp}

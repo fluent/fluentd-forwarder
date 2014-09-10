@@ -1,6 +1,7 @@
 package fluentd_forwarder
 
 import (
+	"bufio"
 	"compress/gzip"
 	"crypto/md5"
 	"errors"
@@ -221,7 +222,9 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 	s = s_.(SizedRandomAccessStore)
 	w := &StoreReadWriter{s, 0, -1}
 	dst := &StoreReadWriter{s, 0, -1}
-	cw, err := gzip.NewWriterLevel(w, blob.level)
+	// assuming average compression ratio to be 1/3
+	writeBufferSize := maxInt(4096, blob.bufferSize/3)
+	cw, err := gzip.NewWriterLevel(bufio.NewWriterSize(w, writeBufferSize), blob.level)
 	if err != nil {
 		return nil, err
 	}
