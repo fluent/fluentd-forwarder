@@ -28,6 +28,7 @@ type CompressingBlobReader struct {
 	dst         *StoreReadWriter
 	s           SizedRandomAccessStore
 	w           *StoreReadWriter
+	bw          *bufio.Writer
 	cw          *gzip.Writer
 	h           hash.Hash
 	eof         bool
@@ -61,6 +62,11 @@ func (reader *CompressingBlobReader) drainAll() error {
 		if err != nil {
 			reader.cw.Close()
 			reader.cw = nil
+			werr := reader.bw.Flush()
+			if werr != nil {
+				return werr
+			}
+			reader.bw = nil
 		}
 	}
 	if err == io.EOF {
@@ -96,15 +102,21 @@ func (reader *CompressingBlobReader) Read(p []byte) (int, error) {
 		}
 		if o > 0 {
 			wn, werr := reader.cw.Write(reader.buf[0:o])
-			copy(reader.buf[0:], reader.buf[wn:])
+			copy(reader.buf[0:], reader.buf[wn:o])
 			reader.o = o - wn
 			if werr != nil {
 				return 0, werr
 			}
-		}
-		if err != nil {
-			reader.cw.Close()
-			reader.cw = nil
+		} else {
+			if reader.eof && reader.cw != nil {
+				reader.cw.Close()
+				reader.cw = nil
+				werr := reader.bw.Flush()
+				if werr != nil {
+					return 0, werr
+				}
+				reader.bw = nil
+			}
 		}
 		var werr error
 		wpos, werr = reader.w.Seek(0, os.SEEK_CUR)
@@ -150,32 +162,48 @@ func (reader *CompressingBlobReader) size() (int64, error) {
 }
 
 func (reader *CompressingBlobReader) Close() error {
-	err1 := (error)(nil)
-	err2 := (error)(nil)
-	err3 := (error)(nil)
+	bwerr := (error)(nil)
+	errs := make([]error, 0, 4)
 	if reader.cw != nil {
-		err1 = reader.cw.Close()
-		if err1 != nil {
+		err := reader.cw.Close()
+		if err == nil {
 			reader.cw = nil
+		} else {
+			errs = append(errs, err)
+		}
+	}
+	if reader.bw != nil {
+		bwerr = reader.bw.Flush()
+		if bwerr == nil {
+			reader.bw = nil
+		} else {
+			errs = append(errs, bwerr)
 		}
 	}
 	if reader.src != nil {
-		err2 = reader.src.Close()
-		if err2 != nil {
+		err := reader.src.Close()
+		if err == nil {
 			reader.src = nil
+		} else {
+			errs = append(errs, err)
 		}
 	}
-	if reader.s != nil {
-		err3 = reader.s.Close()
-		if err3 != nil {
-			reader.s = nil
+	if bwerr != nil {
+		if reader.s != nil {
+			err := reader.s.Close()
+			if err == nil {
+				reader.s = nil
+			} else {
+				errs = append(errs, err)
+			}
 		}
 	}
-	if err1 != nil || err2 != nil || err3 != nil {
-		return errors.New("Close() failed") // XXX
+	if len(errs) > 0 {
+		return Errors(errs)
+	} else {
+		reader.closeNotify(reader)
+		return nil
 	}
-	reader.closeNotify(reader)
-	return nil
 }
 
 func (reader *CompressingBlobReader) md5sum() ([]byte, error) {
@@ -224,7 +252,8 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 	dst := &StoreReadWriter{s, 0, -1}
 	// assuming average compression ratio to be 1/3
 	writeBufferSize := maxInt(4096, blob.bufferSize/3)
-	cw, err := gzip.NewWriterLevel(bufio.NewWriterSize(w, writeBufferSize), blob.level)
+	bw := bufio.NewWriterSize(w, writeBufferSize)
+	cw, err := gzip.NewWriterLevel(bw, blob.level)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +264,7 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 		dst: dst,
 		s:   s,
 		w:   w,
+		bw:  bw,
 		cw:  cw,
 		eof: false,
 		h:   md5.New(),
