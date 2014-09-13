@@ -84,7 +84,7 @@ func ParseArgs() *FluentdForwarderParams {
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
-	flagSet.DurationVar(&retryInterval, "retry-interval", MustParseDuration("5s"), "retry interval in which connection is tried against the remote agent")
+	flagSet.DurationVar(&retryInterval, "retry-interval", 0, "retry interval in which connection is tried against the remote agent")
 	flagSet.DurationVar(&connectionTimeout, "conn-timeout", MustParseDuration("10s"), "connection timeout")
 	flagSet.DurationVar(&writeTimeout, "write-timeout", MustParseDuration("10s"), "write timeout on wire")
 	flagSet.DurationVar(&flushInterval, "flush-interval", MustParseDuration("5s"), "flush interval in which the events are forwareded to the remote agent")
@@ -161,11 +161,49 @@ func ParseArgs() *FluentdForwarderParams {
 	}
 }
 
+func ValidateParams(params *FluentdForwarderParams) bool {
+	if params.RetryInterval < 0 {
+		Error("Retry interval may not be negative")
+		return false
+	}
+	if params.RetryInterval > 0 && params.RetryInterval < 100000000 {
+		Error("Retry interval must be greater than or equal to 100ms")
+		return false
+	}
+	if params.FlushInterval < 100000000 {
+		Error("Flush interval must be greater than or equal to 100ms")
+		return false
+	}
+	if params.FlushInterval < 100000000 {
+		Error("Flush interval must be greater than or equal to 100ms")
+		return false
+	}
+	switch params.OutputType {
+	case "fluent":
+		if params.RetryInterval == 0 {
+			params.RetryInterval = MustParseDuration("5s")
+		}
+		if params.RetryInterval > params.FlushInterval {
+			Error("Retry interval may not be greater than flush interval")
+			return false
+		}
+	case "td":
+		if params.RetryInterval != 0 {
+			Error("Retry interval will be ignored")
+			return false
+		}
+	}
+	return true
+}
+
 func main() {
 	logBackend := logging.NewLogBackend(os.Stderr, "[fluentd-forwarder] ", log.Ltime)
 	logging.SetBackend(logBackend)
 	logger := logging.MustGetLogger("fluentd-forwarder")
 	params := ParseArgs()
+	if !ValidateParams(params) {
+		os.Exit(1)
+	}
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
 
 	workerSet := fluentd_forwarder.NewWorkerSet()
@@ -211,7 +249,6 @@ func main() {
 		output, err = fluentd_forwarder.NewTDOutput(
 			logger,
 			params.ForwardTo,
-			params.RetryInterval,
 			params.ConnectionTimeout,
 			params.WriteTimeout,
 			params.FlushInterval,

@@ -44,7 +44,6 @@ type tdOutputSpoolerDaemon struct {
 type TDOutput struct {
 	logger         *logging.Logger
 	codec          *codec.MsgpackHandle
-	retryInterval  time.Duration
 	databaseName   string
 	tableName      string
 	tempDir        string
@@ -388,7 +387,6 @@ func (output *TDOutput) Start() {
 func NewTDOutput(
 	logger *logging.Logger,
 	endpoint string,
-	retryInterval time.Duration,
 	connectionTimeout time.Duration,
 	writeTimeout time.Duration,
 	flushInterval time.Duration,
@@ -440,7 +438,6 @@ func NewTDOutput(
 	output := &TDOutput{
 		logger:         logger,
 		codec:          &_codec,
-		retryInterval:  retryInterval,
 		wg:             sync.WaitGroup{},
 		flushInterval:  flushInterval,
 		emitterChan:    make(chan FluentRecordSet),
