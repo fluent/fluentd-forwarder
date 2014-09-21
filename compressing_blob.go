@@ -32,6 +32,7 @@ type CompressingBlobReader struct {
 	cw          *gzip.Writer
 	h           hash.Hash
 	eof         bool
+	md5SumAvailable   bool
 	closeNotify func(*CompressingBlobReader)
 }
 
@@ -124,13 +125,11 @@ func (reader *CompressingBlobReader) Read(p []byte) (int, error) {
 			return 0, werr // should never happen
 		}
 	}
-	eof := false
+	if len(p) > 0 && n == 0 && reader.eof {
+		return 0, io.EOF
+	}
 	if n > len(p) {
 		n = len(p)
-	} else {
-		if reader.eof {
-			eof = true
-		}
 	}
 	n, err = reader.dst.Read(p[0:n])
 	reader.h.Write(p[0:n])
@@ -138,8 +137,11 @@ func (reader *CompressingBlobReader) Read(p []byte) (int, error) {
 		if !reader.eof {
 			panic("something went wrong!")
 		}
-	} else if eof {
-		err = io.EOF
+		reader.md5SumAvailable = true
+	} else if err == nil {
+		if n == 0 && reader.eof {
+			err = io.EOF
+		}
 	}
 	return n, err
 }
@@ -164,8 +166,15 @@ func (reader *CompressingBlobReader) size() (int64, error) {
 func (reader *CompressingBlobReader) Close() error {
 	bwerr := (error)(nil)
 	errs := make([]error, 0, 4)
+	err := reader.ensureMD5SumAvailble()
+	if err != nil {
+		return err
+	}
 	if reader.cw != nil {
-		err := reader.cw.Close()
+		if err != nil {
+			return err
+		}
+		err = reader.cw.Close()
 		if err == nil {
 			reader.cw = nil
 		} else {
@@ -206,20 +215,30 @@ func (reader *CompressingBlobReader) Close() error {
 	}
 }
 
-func (reader *CompressingBlobReader) md5sum() ([]byte, error) {
-	if reader.s == nil {
-		return nil, errors.New("already closed")
+func (reader *CompressingBlobReader) ensureMD5SumAvailble() error {
+	if reader.md5SumAvailable {
+		return nil
 	}
-	if reader.cw != nil {
-		err := reader.drainAll()
-		if err != nil {
-			return nil, err
-		}
-		r := *reader.dst
-		_, err = io.Copy(reader.h, &r)
-		if err != nil {
-			return nil, err
-		}
+	if reader.s == nil {
+		return errors.New("already closed")
+	}
+	err := reader.drainAll()
+	if err != nil {
+		return err
+	}
+	r := *reader.dst
+	_, err = io.Copy(reader.h, &r)
+	if err != nil {
+		return err
+	}
+	reader.md5SumAvailable = true
+	return nil
+}
+
+func (reader *CompressingBlobReader) md5sum() ([]byte, error) {
+	err := reader.ensureMD5SumAvailble()
+	if err != nil {
+		return nil, err
 	}
 	retval := make([]byte, 0, reader.h.Size())
 	return reader.h.Sum(retval), nil
@@ -268,6 +287,7 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 		cw:  cw,
 		eof: false,
 		h:   md5.New(),
+		md5SumAvailable: false,
 		closeNotify: func(reader *CompressingBlobReader) {
 			md5sum, err := reader.md5sum()
 			if err == nil {
@@ -334,7 +354,14 @@ func (blob *CompressingBlob) MD5Sum() ([]byte, error) {
 	return blob.md5sum, nil
 }
 
-func NewCompressingBlob(blob td_client.Blob, bufferSize int, level int, tempFactory RandomAccessStoreFactory) td_client.Blob {
+func (blob *CompressingBlob) Dispose() error {
+	if blob.reader != nil {
+		return blob.reader.Close()
+	}
+	return nil
+}
+
+func NewCompressingBlob(blob td_client.Blob, bufferSize int, level int, tempFactory RandomAccessStoreFactory) *CompressingBlob {
 	return &CompressingBlob{
 		inner:       blob,
 		level:       level,

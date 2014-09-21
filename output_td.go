@@ -110,21 +110,26 @@ outer:
 						<-sem
 						chunk.Dispose()
 					}()
-					_, err = spooler.client.Import(
-						spooler.databaseName,
-						spooler.tableName,
-						"msgpack.gz",
-						td_client.NewBufferingBlobSize(
-							NewCompressingBlob(
-								chunk,
-								maxInt(4096, int(size/4)),
-								gzip.BestSpeed,
-								&spooler.daemon.tempFactory,
+					err := func() error {
+						compressingBlob := NewCompressingBlob(
+							chunk,
+							maxInt(4096, int(size/4)),
+							gzip.BestSpeed,
+							&spooler.daemon.tempFactory,
+						)
+						defer compressingBlob.Dispose()
+						_, err := spooler.client.Import(
+							spooler.databaseName,
+							spooler.tableName,
+							"msgpack.gz",
+							td_client.NewBufferingBlobSize(
+								compressingBlob,
+								maxInt(4096, int(size/16)),
 							),
-							maxInt(4096, int(size/16)),
-						),
-						chunk.Id(),
-					)
+							chunk.Id(),
+						)
+						return err
+					}()
 					futureErr <- err
 					if err != nil {
 						spooler.daemon.output.logger.Info("Failed to flush chunk %s (reason: %s)", chunk.String(), err.Error())
