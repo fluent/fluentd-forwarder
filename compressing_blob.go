@@ -188,7 +188,7 @@ func (reader *CompressingBlobReader) Close() error {
 			errs = append(errs, err)
 		}
 	}
-	if bwerr != nil {
+	if bwerr == nil {
 		if reader.s != nil {
 			err := reader.s.Close()
 			if err == nil {
