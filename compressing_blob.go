@@ -126,6 +126,7 @@ func (reader *CompressingBlobReader) Read(p []byte) (int, error) {
 		}
 	}
 	if len(p) > 0 && n == 0 && reader.eof {
+		reader.md5SumAvailable = true
 		return 0, io.EOF
 	}
 	if n > len(p) {
@@ -138,10 +139,6 @@ func (reader *CompressingBlobReader) Read(p []byte) (int, error) {
 			panic("something went wrong!")
 		}
 		reader.md5SumAvailable = true
-	} else if err == nil {
-		if n == 0 && reader.eof {
-			err = io.EOF
-		}
 	}
 	return n, err
 }
