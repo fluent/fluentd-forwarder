@@ -173,8 +173,9 @@ func (journal *FileJournal) deleteRef(chunk *FileJournalChunk) error {
 	if refcount == 0 {
 		chunk.mtx.Lock()
 		defer chunk.mtx.Unlock()
-		chunk.container.mtx.Lock()
-		defer chunk.container.mtx.Unlock()
+		container := chunk.container
+		container.mtx.Lock()
+		defer container.mtx.Unlock()
 		err := os.Remove(chunk.Path)
 		if err != nil {
 			// undo the change
@@ -186,17 +187,17 @@ func (journal *FileJournal) deleteRef(chunk *FileJournalChunk) error {
 			nextChunk := chunk.head.next
 			if prevChunk != nil {
 				prevChunk.head.next = nextChunk
-			} else if chunk.container.first == chunk {
-				chunk.container.first = nextChunk
+			} else if container.first == chunk {
+				container.first = nextChunk
 			}
 			if nextChunk != nil {
 				nextChunk.head.prev = prevChunk
-			} else if chunk.container.last == chunk {
-				chunk.container.last = prevChunk
+			} else if container.last == chunk {
+				container.last = prevChunk
 			}
 			chunk.head.prev = nil
 			chunk.head.next = nil
-			chunk.container.count -= 1
+			container.count -= 1
 		}
 		return nil
 	} else if refcount < 0 {
@@ -244,8 +245,11 @@ func (chunk *FileJournalChunk) md5Sum() ([]byte, error) {
 }
 
 func (chunk *FileJournalChunk) getNextChunk(journal *FileJournal) *FileJournalChunk {
-	chunk.container.mtx.Lock()
-	defer chunk.container.mtx.Unlock()
+	chunk.mtx.Lock()
+	defer chunk.mtx.Unlock()
+	container := chunk.container
+	container.mtx.Lock()
+	defer container.mtx.Unlock()
 	return chunk.head.prev
 }
 
@@ -334,7 +338,9 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 			journal.chunks.last = journal.chunks.first
 			journal.chunks.count = 1
 			for chunk := nextOfFirstChunk; chunk != nil; chunk = chunk.head.next {
+				chunk.mtx.Lock()
 				chunk.container = dequeue
+				chunk.mtx.Unlock()
 			}
 			return dequeue
 		}
@@ -409,7 +415,9 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 			journal.chunks.mtx.Lock()
 			defer journal.chunks.mtx.Unlock()
 			for chunk := dequeue.last; chunk != nil; chunk = chunk.head.prev {
+				chunk.mtx.Lock()
 				chunk.container = &journal.chunks
+				chunk.mtx.Unlock()
 			}
 			if journal.chunks.last != nil {
 				journal.chunks.last.head.next = dequeue.first
