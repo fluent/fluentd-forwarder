@@ -22,6 +22,7 @@ type DummyServerParams struct {
 	WriteTimeout time.Duration
 	ReadTimeout  time.Duration
 	ListenOn     string
+	ReadThrottle int
 }
 
 var progName = os.Args[0]
@@ -43,12 +44,14 @@ func Error(fmtStr string, args ...interface{}) {
 func ParseArgs() *DummyServerParams {
 	readTimeout := (time.Duration)(0)
 	writeTimeout := (time.Duration)(0)
+	readThrottle := 0
 	listenOn := ""
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
 	flagSet.DurationVar(&readTimeout, "read-timeout", MustParseDuration("10s"), "read timeout on wire")
 	flagSet.DurationVar(&writeTimeout, "write-timeout", MustParseDuration("10s"), "write timeout on wire")
+	flagSet.IntVar(&readThrottle, "read-throttle", 0, "read slottling")
 	flagSet.StringVar(&listenOn, "listen-on", "127.0.0.1:80", "interface address and port on which the dummy server listens")
 	flagSet.Parse(os.Args[1:])
 
@@ -56,6 +59,7 @@ func ParseArgs() *DummyServerParams {
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		ListenOn:     listenOn,
+		ReadThrottle: readThrottle,
 	}
 }
 
@@ -64,11 +68,55 @@ func internalServerError(resp http.ResponseWriter) {
 	resp.Write([]byte(`{"errorMessage":"Internal Server Error"}`))
 }
 
-func handle(resp http.ResponseWriter, req *http.Request, matchparams map[string]string) {
+func ReadThrottled(rdr io.Reader, l int, bps int) ([]byte, error) {
+	_bps := int64(bps)
+	b := make([]byte, 4096)
+	t := time.Now()
+	o := 0
+	for o < l {
+		if o + 4096 >= len(b) {
+			_b := make([]byte, len(b) + len(b) / 2)
+			copy(_b, b)
+			b = _b
+		}
+		_t := time.Now()
+		elapsed := _t.Sub(t)
+		if elapsed > 0 {
+			_o := int64(o) * int64(1000000000)
+			cbps := _o / int64(elapsed)
+			if cbps > _bps {
+				time.Sleep(time.Duration(_o / _bps - int64(elapsed)))
+			}
+		}
+		x := o + 4096
+		if x >= len(b) {
+			x = len(b)
+		}
+		n, err := rdr.Read(b[o:x])
+		o += n
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			} else {
+				break
+			}
+		}
+	}
+	b = b[0:o]
+	return b, nil
+}
+
+func handleReq(params *DummyServerParams, resp http.ResponseWriter, req *http.Request, matchparams map[string]string) {
 	resp.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	h := md5.New()
 	format := matchparams["format"]
-	body, err := ioutil.ReadAll(req.Body)
+	var body []byte
+	var err error
+	if params.ReadThrottle > 0 {
+		body, err = ReadThrottled(req.Body, int(req.ContentLength), params.ReadThrottle)
+	} else {
+		body, err = ioutil.ReadAll(req.Body)
+	}
 	if err != nil {
 		internalServerError(resp)
 		return
@@ -171,7 +219,7 @@ func newRegexpServeMux() *RegexpServeMux {
 	}
 }
 
-func buildMux() *RegexpServeMux {
+func buildMux(handle RegexpServeMuxHandler) *RegexpServeMux {
 	mux := newRegexpServeMux()
 	err := mux.Handle("^/v3/table/import_with_id/(?P<database>[^/]+)/(?P<table>[^/]+)/(?P<uniqueId>[^/]+)/(?P<format>[^/]+)$", handle)
 	if err != nil {
@@ -184,10 +232,11 @@ func buildMux() *RegexpServeMux {
 	return mux
 }
 
-var mux = buildMux()
-
 func main() {
 	params := ParseArgs()
+	var mux = buildMux(func (resp http.ResponseWriter, req *http.Request, matchparams map[string]string) {
+		handleReq(params, resp, req, matchparams)
+	})
 	server := http.Server{
 		Addr:         params.ListenOn,
 		ReadTimeout:  params.ReadTimeout,
