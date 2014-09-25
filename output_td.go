@@ -105,11 +105,19 @@ outer:
 				sem := spooler.daemon.output.sem
 				sem <- struct{}{}
 				go func(size int64, chunk JournalChunk, futureErr chan error) {
+					err := (error)(nil)
 					defer func() {
+						if err != nil {
+							spooler.daemon.output.logger.Info("Failed to flush chunk %s (reason: %s)", chunk.String(), err.Error())
+						} else {
+							spooler.daemon.output.logger.Info("Completed flushing chunk %s", chunk.String())
+						}
 						<-sem
+						// disposal must be done before notifying the initiator 
 						chunk.Dispose()
+						futureErr <- err
 					}()
-					err := func() error {
+					err = func() error {
 						compressingBlob := NewCompressingBlob(
 							chunk,
 							maxInt(4096, int(size/4)),
@@ -129,12 +137,6 @@ outer:
 						)
 						return err
 					}()
-					futureErr <- err
-					if err != nil {
-						spooler.daemon.output.logger.Info("Failed to flush chunk %s (reason: %s)", chunk.String(), err.Error())
-					} else {
-						spooler.daemon.output.logger.Info("Completed flushing chunk %s", chunk.String())
-					}
 				}(size, chunk.Dup(), futureErr)
 				return (<-chan error)(futureErr)
 			})
