@@ -372,7 +372,7 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 						// asynchrnous
 						futureErr, ok = errOrFuture.(<-chan error)
 						if !ok {
-							panic("visitor returned something that is neither an error or channel")
+							panic("visitor returned something that is neither an error nor a channel")
 						}
 					}
 					pairs = append(pairs, pair{chunk, futureErr})
