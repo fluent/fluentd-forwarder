@@ -12,7 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
 var randSource = rand.NewSource(time.Now().UnixNano())
@@ -32,7 +31,7 @@ type ForwardOutput struct {
 	journal             Journal
 	emitterChan         chan FluentRecordSet
 	spoolerShutdownChan chan struct{}
-	isShuttingDown      unsafe.Pointer
+	isShuttingDown      uintptr
 	completion          sync.Cond
 }
 
@@ -61,7 +60,7 @@ func (output *ForwardOutput) ensureConnected() error {
 
 func (output *ForwardOutput) sendBuffer(buf []byte) error {
 	for len(buf) > 0 {
-		if atomic.LoadPointer(&output.isShuttingDown) != unsafe.Pointer(uintptr(0)) {
+		if atomic.LoadUintptr(&output.isShuttingDown) != 0 {
 			break
 		}
 		err := output.ensureConnected()
@@ -193,7 +192,7 @@ func (output *ForwardOutput) String() string {
 }
 
 func (output *ForwardOutput) Stop() {
-	if atomic.CompareAndSwapPointer(&output.isShuttingDown, unsafe.Pointer(uintptr(0)), unsafe.Pointer(uintptr(1))) {
+	if atomic.CompareAndSwapUintptr(&output.isShuttingDown, 0, 1) {
 		close(output.emitterChan)
 	}
 }
@@ -245,7 +244,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		flushInterval:       flushInterval,
 		emitterChan:         make(chan FluentRecordSet),
 		spoolerShutdownChan: make(chan struct{}),
-		isShuttingDown:      unsafe.Pointer(uintptr(0)),
+		isShuttingDown:      0,
 		completion:          sync.Cond{L: &sync.Mutex{}},
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)

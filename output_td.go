@@ -15,7 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
 type tdOutputSpooler struct {
@@ -27,7 +26,7 @@ type tdOutputSpooler struct {
 	key            string
 	journal        Journal
 	shutdownChan   chan struct{}
-	isShuttingDown unsafe.Pointer
+	isShuttingDown uintptr
 	client         *td_client.TDClient
 }
 
@@ -54,7 +53,7 @@ type TDOutput struct {
 	journalGroup   JournalGroup
 	emitterChan    chan FluentRecordSet
 	spoolerDaemon  *tdOutputSpoolerDaemon
-	isShuttingDown unsafe.Pointer
+	isShuttingDown uintptr
 	client         *td_client.TDClient
 	sem            chan struct{}
 	gcChan         chan *os.File
@@ -91,7 +90,7 @@ outer:
 			spooler.daemon.output.logger.Notice("Flushing...")
 			err := spooler.journal.Flush(func(chunk JournalChunk) interface{} {
 				defer chunk.Dispose()
-				if atomic.LoadPointer(&spooler.isShuttingDown) != unsafe.Pointer(uintptr(0)) {
+				if atomic.LoadUintptr(&spooler.isShuttingDown) != 0 {
 					return errors.New("Flush aborted")
 				}
 				spooler.daemon.output.logger.Info("Flushing chunk %s", chunk.String())
@@ -184,6 +183,7 @@ func newTDOutputSpooler(daemon *tdOutputSpoolerDaemon, databaseName, tableName, 
 		key:          key,
 		journal:      journal,
 		shutdownChan: make(chan struct{}, 1),
+		isShuttingDown: 0,
 		client:       daemon.output.client,
 	}
 }
@@ -208,7 +208,7 @@ func (daemon *tdOutputSpoolerDaemon) cleanup() {
 		daemon.spoolersMtx.Lock()
 		defer daemon.spoolersMtx.Unlock()
 		for _, spooler := range daemon.spoolers {
-			if atomic.CompareAndSwapPointer(&spooler.isShuttingDown, unsafe.Pointer(uintptr(0)), unsafe.Pointer(uintptr(1))) {
+			if atomic.CompareAndSwapUintptr(&spooler.isShuttingDown, 0, 1) {
 				spooler.shutdownChan <- struct{}{}
 			}
 		}
@@ -361,7 +361,7 @@ func (output *TDOutput) String() string {
 }
 
 func (output *TDOutput) Stop() {
-	if atomic.CompareAndSwapPointer(&output.isShuttingDown, unsafe.Pointer(uintptr(0)), unsafe.Pointer(uintptr(1))) {
+	if atomic.CompareAndSwapUintptr(&output.isShuttingDown, 0, 1) {
 		close(output.emitterChan)
 	}
 }
@@ -446,7 +446,7 @@ func NewTDOutput(
 		wg:             sync.WaitGroup{},
 		flushInterval:  flushInterval,
 		emitterChan:    make(chan FluentRecordSet),
-		isShuttingDown: unsafe.Pointer(uintptr(0)),
+		isShuttingDown: 0,
 		client:         client,
 		databaseName:   databaseName,
 		tableName:      tableName,
