@@ -82,7 +82,7 @@ type FileJournalChunkWrapper struct {
 }
 
 func (wrapper *FileJournalChunkWrapper) Path() (string, error) {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return "", errors.New("already disposed")
 	}
@@ -90,7 +90,7 @@ func (wrapper *FileJournalChunkWrapper) Path() (string, error) {
 }
 
 func (wrapper *FileJournalChunkWrapper) Id() string {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return ""
 	}
@@ -107,7 +107,7 @@ func (wrapper *FileJournalChunkWrapper) String() string {
 }
 
 func (wrapper *FileJournalChunkWrapper) Size() (int64, error) {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return -1, errors.New("already disposed")
 	}
@@ -115,7 +115,7 @@ func (wrapper *FileJournalChunkWrapper) Size() (int64, error) {
 }
 
 func (wrapper *FileJournalChunkWrapper) Reader() (io.ReadCloser, error) {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return nil, errors.New("already disposed")
 	}
@@ -123,7 +123,7 @@ func (wrapper *FileJournalChunkWrapper) Reader() (io.ReadCloser, error) {
 }
 
 func (wrapper *FileJournalChunkWrapper) MD5Sum() ([]byte, error) {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return nil, errors.New("already disposed")
 	}
@@ -131,7 +131,7 @@ func (wrapper *FileJournalChunkWrapper) MD5Sum() ([]byte, error) {
 }
 
 func (wrapper *FileJournalChunkWrapper) NextChunk() JournalChunk {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return nil
 	}
@@ -144,7 +144,7 @@ func (wrapper *FileJournalChunkWrapper) NextChunk() JournalChunk {
 }
 
 func (wrapper *FileJournalChunkWrapper) Dispose() error {
-	chunk := (*FileJournalChunk)(atomic.SwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk)), nil))
+	chunk := (*FileJournalChunk)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk)), nil))
 	if chunk == nil {
 		return errors.New("already disposed")
 	}
@@ -152,7 +152,7 @@ func (wrapper *FileJournalChunkWrapper) Dispose() error {
 }
 
 func (wrapper *FileJournalChunkWrapper) Dup() JournalChunk {
-	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)((unsafe.Pointer)(&wrapper.chunk))))
+	chunk := (*FileJournalChunk)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&wrapper.chunk))))
 	if chunk == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func (journal *FileJournal) deleteRef(chunk *FileJournalChunk) error {
 	if refcount == 0 {
 		chunk.mtx.Lock()
 		defer chunk.mtx.Unlock()
-		container := chunk.container
+		container := (*FileJournalChunkDequeue)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&chunk.container))))
 		container.mtx.Lock()
 		defer container.mtx.Unlock()
 		err := os.Remove(chunk.Path)
@@ -247,7 +247,7 @@ func (chunk *FileJournalChunk) md5Sum() ([]byte, error) {
 func (chunk *FileJournalChunk) getNextChunk(journal *FileJournal) *FileJournalChunk {
 	chunk.mtx.Lock()
 	defer chunk.mtx.Unlock()
-	container := chunk.container
+	container := (*FileJournalChunkDequeue)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&chunk.container))))
 	container.mtx.Lock()
 	defer container.mtx.Unlock()
 	return chunk.head.prev
@@ -338,9 +338,7 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 			journal.chunks.last = journal.chunks.first
 			journal.chunks.count = 1
 			for chunk := nextOfFirstChunk; chunk != nil; chunk = chunk.head.next {
-				chunk.mtx.Lock()
-				chunk.container = dequeue
-				chunk.mtx.Unlock()
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&chunk.container)), unsafe.Pointer(dequeue))
 			}
 			return dequeue
 		}
@@ -414,10 +412,10 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 			// re-attach chunks
 			journal.chunks.mtx.Lock()
 			defer journal.chunks.mtx.Unlock()
+			dequeue.mtx.Lock()
+			defer dequeue.mtx.Unlock()
 			for chunk := dequeue.last; chunk != nil; chunk = chunk.head.prev {
-				chunk.mtx.Lock()
-				chunk.container = &journal.chunks
-				chunk.mtx.Unlock()
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&chunk.container)), unsafe.Pointer(&journal.chunks))
 			}
 			if journal.chunks.last != nil {
 				journal.chunks.last.head.next = dequeue.first
