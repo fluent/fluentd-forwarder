@@ -41,6 +41,7 @@ type PortWorker interface {
 }
 
 var progName = os.Args[0]
+var progVersion string
 
 func MustParseDuration(s string) time.Duration {
 	d, err := time.ParseDuration(s)
@@ -197,7 +198,7 @@ func ValidateParams(params *FluentdForwarderParams) bool {
 }
 
 func main() {
-	logBackend := logging.NewLogBackend(os.Stderr, "[fluentd-forwarder] ", log.Ltime)
+	logBackend := logging.NewLogBackend(os.Stderr, "[fluentd-forwarder] ", log.Ldate | log.Ltime | log.Lmicroseconds)
 	logging.SetBackend(logBackend)
 	logger := logging.MustGetLogger("fluentd-forwarder")
 	params := ParseArgs()
@@ -205,6 +206,9 @@ func main() {
 		os.Exit(1)
 	}
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
+	if progVersion != "" {
+		logger.Info("Version %s starting...", progVersion)
+	}
 
 	workerSet := fluentd_forwarder.NewWorkerSet()
 
