@@ -163,7 +163,7 @@ func normalizeDatabaseName(name string) (string, error) {
 	}
 	name_ = bytes.ToLower(name_)
 	for i, c := range name_ {
-		if !((c >= 'a' || c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
 			c = '_'
 		}
 		name_[i] = c
