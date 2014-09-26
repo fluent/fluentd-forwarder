@@ -17,23 +17,23 @@ import (
 var randSource = rand.NewSource(time.Now().UnixNano())
 
 type ForwardOutput struct {
-	logger              *logging.Logger
-	codec               *codec.MsgpackHandle
-	bind                string
-	retryInterval       time.Duration
-	connectionTimeout   time.Duration
-	writeTimeout        time.Duration
-	enc                 *codec.Encoder
-	conn                net.Conn
-	flushInterval       time.Duration
-	wg                  sync.WaitGroup
-	journalGroup        JournalGroup
-	journal             Journal
-	emitterChan         chan FluentRecordSet
-	spoolerShutdownChan chan struct{}
-	isShuttingDown      uintptr
-	completion          sync.Cond
-	hasShutdownCompleted          bool
+	logger               *logging.Logger
+	codec                *codec.MsgpackHandle
+	bind                 string
+	retryInterval        time.Duration
+	connectionTimeout    time.Duration
+	writeTimeout         time.Duration
+	enc                  *codec.Encoder
+	conn                 net.Conn
+	flushInterval        time.Duration
+	wg                   sync.WaitGroup
+	journalGroup         JournalGroup
+	journal              Journal
+	emitterChan          chan FluentRecordSet
+	spoolerShutdownChan  chan struct{}
+	isShuttingDown       uintptr
+	completion           sync.Cond
+	hasShutdownCompleted bool
 }
 
 func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
@@ -240,18 +240,18 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		maxJournalChunkSize,
 	)
 	output := &ForwardOutput{
-		logger:              logger,
-		codec:               &_codec,
-		bind:                bind,
-		retryInterval:       retryInterval,
-		connectionTimeout:   connectionTimeout,
-		writeTimeout:        writeTimeout,
-		wg:                  sync.WaitGroup{},
-		flushInterval:       flushInterval,
-		emitterChan:         make(chan FluentRecordSet),
-		spoolerShutdownChan: make(chan struct{}),
-		isShuttingDown:      0,
-		completion:          sync.Cond{L: &sync.Mutex{}},
+		logger:               logger,
+		codec:                &_codec,
+		bind:                 bind,
+		retryInterval:        retryInterval,
+		connectionTimeout:    connectionTimeout,
+		writeTimeout:         writeTimeout,
+		wg:                   sync.WaitGroup{},
+		flushInterval:        flushInterval,
+		emitterChan:          make(chan FluentRecordSet),
+		spoolerShutdownChan:  make(chan struct{}),
+		isShuttingDown:       0,
+		completion:           sync.Cond{L: &sync.Mutex{}},
 		hasShutdownCompleted: false,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)

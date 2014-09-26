@@ -41,23 +41,23 @@ type tdOutputSpoolerDaemon struct {
 }
 
 type TDOutput struct {
-	logger         *logging.Logger
-	codec          *codec.MsgpackHandle
-	databaseName   string
-	tableName      string
-	tempDir        string
-	enc            *codec.Encoder
-	conn           net.Conn
-	flushInterval  time.Duration
-	wg             sync.WaitGroup
-	journalGroup   JournalGroup
-	emitterChan    chan FluentRecordSet
-	spoolerDaemon  *tdOutputSpoolerDaemon
-	isShuttingDown uintptr
-	client         *td_client.TDClient
-	sem            chan struct{}
-	gcChan         chan *os.File
-	completion     sync.Cond
+	logger               *logging.Logger
+	codec                *codec.MsgpackHandle
+	databaseName         string
+	tableName            string
+	tempDir              string
+	enc                  *codec.Encoder
+	conn                 net.Conn
+	flushInterval        time.Duration
+	wg                   sync.WaitGroup
+	journalGroup         JournalGroup
+	emitterChan          chan FluentRecordSet
+	spoolerDaemon        *tdOutputSpoolerDaemon
+	isShuttingDown       uintptr
+	client               *td_client.TDClient
+	sem                  chan struct{}
+	gcChan               chan *os.File
+	completion           sync.Cond
 	hasShutdownCompleted bool
 }
 
@@ -114,7 +114,7 @@ outer:
 							spooler.daemon.output.logger.Info("Completed flushing chunk %s", chunk.String())
 						}
 						<-sem
-						// disposal must be done before notifying the initiator 
+						// disposal must be done before notifying the initiator
 						chunk.Dispose()
 						futureErr <- err
 					}()
@@ -179,15 +179,15 @@ func normalizeTableName(name string) (string, error) {
 func newTDOutputSpooler(daemon *tdOutputSpoolerDaemon, databaseName, tableName, key string) *tdOutputSpooler {
 	journal := daemon.output.journalGroup.GetJournal(key)
 	return &tdOutputSpooler{
-		daemon:       daemon,
-		ticker:       time.NewTicker(daemon.output.flushInterval),
-		databaseName: databaseName,
-		tableName:    tableName,
-		key:          key,
-		journal:      journal,
-		shutdownChan: make(chan struct{}, 1),
+		daemon:         daemon,
+		ticker:         time.NewTicker(daemon.output.flushInterval),
+		databaseName:   databaseName,
+		tableName:      tableName,
+		key:            key,
+		journal:        journal,
+		shutdownChan:   make(chan struct{}, 1),
 		isShuttingDown: 0,
-		client:       daemon.output.client,
+		client:         daemon.output.client,
 	}
 }
 
@@ -449,19 +449,19 @@ func NewTDOutput(
 		return nil, err
 	}
 	output := &TDOutput{
-		logger:         logger,
-		codec:          &_codec,
-		wg:             sync.WaitGroup{},
-		flushInterval:  flushInterval,
-		emitterChan:    make(chan FluentRecordSet),
-		isShuttingDown: 0,
-		client:         client,
-		databaseName:   databaseName,
-		tableName:      tableName,
-		tempDir:        tempDir,
-		sem:            make(chan struct{}, parallelism),
-		gcChan:         make(chan *os.File, 10),
-		completion:     sync.Cond{L: &sync.Mutex{}},
+		logger:               logger,
+		codec:                &_codec,
+		wg:                   sync.WaitGroup{},
+		flushInterval:        flushInterval,
+		emitterChan:          make(chan FluentRecordSet),
+		isShuttingDown:       0,
+		client:               client,
+		databaseName:         databaseName,
+		tableName:            tableName,
+		tempDir:              tempDir,
+		sem:                  make(chan struct{}, parallelism),
+		gcChan:               make(chan *os.File, 10),
+		completion:           sync.Cond{L: &sync.Mutex{}},
 		hasShutdownCompleted: false,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)

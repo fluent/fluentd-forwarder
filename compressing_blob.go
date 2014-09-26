@@ -22,18 +22,18 @@ type CompressingBlob struct {
 }
 
 type CompressingBlobReader struct {
-	buf         []byte // ring buffer
-	o           int
-	src         io.ReadCloser
-	dst         *StoreReadWriter
-	s           SizedRandomAccessStore
-	w           *StoreReadWriter
-	bw          *bufio.Writer
-	cw          *gzip.Writer
-	h           hash.Hash
-	eof         bool
-	md5SumAvailable   bool
-	closeNotify func(*CompressingBlobReader)
+	buf             []byte // ring buffer
+	o               int
+	src             io.ReadCloser
+	dst             *StoreReadWriter
+	s               SizedRandomAccessStore
+	w               *StoreReadWriter
+	bw              *bufio.Writer
+	cw              *gzip.Writer
+	h               hash.Hash
+	eof             bool
+	md5SumAvailable bool
+	closeNotify     func(*CompressingBlobReader)
 }
 
 func (reader *CompressingBlobReader) drainAll() error {
@@ -274,16 +274,16 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 		return nil, err
 	}
 	return &CompressingBlobReader{
-		buf: make([]byte, blob.bufferSize),
-		o:   0,
-		src: src,
-		dst: dst,
-		s:   s,
-		w:   w,
-		bw:  bw,
-		cw:  cw,
-		eof: false,
-		h:   md5.New(),
+		buf:             make([]byte, blob.bufferSize),
+		o:               0,
+		src:             src,
+		dst:             dst,
+		s:               s,
+		w:               w,
+		bw:              bw,
+		cw:              cw,
+		eof:             false,
+		h:               md5.New(),
 		md5SumAvailable: false,
 		closeNotify: func(reader *CompressingBlobReader) {
 			md5sum, err := reader.md5sum()
