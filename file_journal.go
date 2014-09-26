@@ -9,7 +9,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -705,7 +705,7 @@ func validateChunks(chunks *FileJournalChunkDequeue) error {
 
 func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) (map[string]*FileJournal, error) {
 	journals := make(map[string]*FileJournal)
-	dirname, basename := path.Split(pathPrefix)
+	dirname, basename := filepath.Split(pathPrefix)
 	if dirname == "" {
 		dirname = "."
 	}
