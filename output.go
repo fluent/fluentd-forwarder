@@ -33,6 +33,7 @@ type ForwardOutput struct {
 	spoolerShutdownChan chan struct{}
 	isShuttingDown      uintptr
 	completion          sync.Cond
+	hasShutdownCompleted          bool
 }
 
 func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
@@ -199,7 +200,9 @@ func (output *ForwardOutput) Stop() {
 
 func (output *ForwardOutput) WaitForShutdown() {
 	output.completion.L.Lock()
-	output.completion.Wait()
+	if !output.hasShutdownCompleted {
+		output.completion.Wait()
+	}
 	output.completion.L.Unlock()
 }
 
@@ -212,7 +215,10 @@ func (output *ForwardOutput) Start() {
 		if err != nil {
 			output.logger.Error("%s", err.Error())
 		}
+		output.completion.L.Lock()
+		output.hasShutdownCompleted = true
 		output.completion.Broadcast()
+		output.completion.L.Unlock()
 	}()
 	output.spawnSpooler()
 	output.spawnEmitter()
@@ -246,6 +252,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		spoolerShutdownChan: make(chan struct{}),
 		isShuttingDown:      0,
 		completion:          sync.Cond{L: &sync.Mutex{}},
+		hasShutdownCompleted: false,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {

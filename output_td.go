@@ -58,6 +58,7 @@ type TDOutput struct {
 	sem            chan struct{}
 	gcChan         chan *os.File
 	completion     sync.Cond
+	hasShutdownCompleted bool
 }
 
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
@@ -370,7 +371,9 @@ func (output *TDOutput) Stop() {
 
 func (output *TDOutput) WaitForShutdown() {
 	output.completion.L.Lock()
-	output.completion.Wait()
+	if !output.hasShutdownCompleted {
+		output.completion.Wait()
+	}
 	output.completion.L.Unlock()
 }
 
@@ -383,7 +386,10 @@ func (output *TDOutput) Start() {
 		if err != nil {
 			output.logger.Error("%s", err.Error())
 		}
+		output.completion.L.Lock()
+		output.hasShutdownCompleted = true
 		output.completion.Broadcast()
+		output.completion.L.Unlock()
 	}()
 	output.spawnTempFileCollector()
 	output.spawnEmitter()
@@ -456,6 +462,7 @@ func NewTDOutput(
 		sem:            make(chan struct{}, parallelism),
 		gcChan:         make(chan *os.File, 10),
 		completion:     sync.Cond{L: &sync.Mutex{}},
+		hasShutdownCompleted: false,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {
