@@ -6,13 +6,17 @@ import (
 	"fmt"
 	logging "github.com/op/go-logging"
 	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
 	"strings"
 	"time"
+	strftime "github.com/moriyoshi/go-strftime"
+	ioextras "github.com/moriyoshi/go-ioextras"
 )
 
 type FluentdForwarderParams struct {
@@ -27,6 +31,7 @@ type FluentdForwarderParams struct {
 	OutputType          string
 	ForwardTo           string
 	LogLevel            logging.Level
+	LogFile             string
 	DatabaseName        string
 	TableName           string
 	ApiKey              string
@@ -82,6 +87,7 @@ func ParseArgs() *FluentdForwarderParams {
 	logLevel := LogLevelValue(logging.INFO)
 	sslCACertBundleFile := ""
 	cpuProfileFile := ""
+	logFile := ""
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
@@ -97,6 +103,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.Var(&logLevel, "log-level", "log level (defaults to INFO)")
 	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
 	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
+	flagSet.StringVar(&logFile, "log-file", "", "path of the log file. log will be written to stderr if unspecified")
 	flagSet.Parse(os.Args[1:])
 
 	ssl := false
@@ -157,6 +164,7 @@ func ParseArgs() *FluentdForwarderParams {
 		JournalGroupPath:    journalGroupPath,
 		MaxJournalChunkSize: maxJournalChunkSize,
 		LogLevel:            logging.Level(logLevel),
+		LogFile:             logFile,
 		SslCACertBundleFile: sslCACertBundleFile,
 		CPUProfileFile:      cpuProfileFile,
 	}
@@ -198,13 +206,33 @@ func ValidateParams(params *FluentdForwarderParams) bool {
 }
 
 func main() {
-	logBackend := logging.NewLogBackend(os.Stderr, "[fluentd-forwarder] ", log.Ldate | log.Ltime | log.Lmicroseconds)
-	logging.SetBackend(logBackend)
-	logger := logging.MustGetLogger("fluentd-forwarder")
 	params := ParseArgs()
 	if !ValidateParams(params) {
 		os.Exit(1)
 	}
+	logWriter := (io.Writer)(nil)
+	if params.LogFile != "" {
+		logWriter = ioextras.NewStaticRotatingWriter(
+			func (_ interface{}) (string, error) {
+				path := strftime.Format(params.LogFile, time.Now())
+				return path, nil
+			},
+			func (path string, _ interface{}) (io.Writer, error) {
+				dir, _ := filepath.Split(path)
+				err := os.MkdirAll(dir, os.FileMode(0777))
+				if err != nil {
+					return nil, err
+				}
+				return os.OpenFile(path, os.O_CREATE | os.O_APPEND | os.O_WRONLY, os.FileMode(0666))
+			},
+			nil,
+		)
+	} else {
+		logWriter = os.Stderr
+	}
+	logBackend := logging.NewLogBackend(logWriter, "[fluentd-forwarder] ", log.Ldate | log.Ltime | log.Lmicroseconds)
+	logging.SetBackend(logBackend)
+	logger := logging.MustGetLogger("fluentd-forwarder")
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
 	if progVersion != "" {
 		logger.Info("Version %s starting...", progVersion)
