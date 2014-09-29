@@ -74,8 +74,8 @@ func ReadThrottled(rdr io.Reader, l int, bps int) ([]byte, error) {
 	t := time.Now()
 	o := 0
 	for o < l {
-		if o + 4096 >= len(b) {
-			_b := make([]byte, len(b) + len(b) / 2)
+		if o+4096 >= len(b) {
+			_b := make([]byte, len(b)+len(b)/2)
 			copy(_b, b)
 			b = _b
 		}
@@ -85,7 +85,7 @@ func ReadThrottled(rdr io.Reader, l int, bps int) ([]byte, error) {
 			_o := int64(o) * int64(1000000000)
 			cbps := _o / int64(elapsed)
 			if cbps > _bps {
-				time.Sleep(time.Duration(_o / _bps - int64(elapsed)))
+				time.Sleep(time.Duration(_o/_bps - int64(elapsed)))
 			}
 		}
 		x := o + 4096
@@ -234,7 +234,7 @@ func buildMux(handle RegexpServeMuxHandler) *RegexpServeMux {
 
 func main() {
 	params := ParseArgs()
-	var mux = buildMux(func (resp http.ResponseWriter, req *http.Request, matchparams map[string]string) {
+	var mux = buildMux(func(resp http.ResponseWriter, req *http.Request, matchparams map[string]string) {
 		handleReq(params, resp, req, matchparams)
 	})
 	server := http.Server{
