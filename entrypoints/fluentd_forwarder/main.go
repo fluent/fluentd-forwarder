@@ -4,6 +4,8 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	ioextras "github.com/moriyoshi/go-ioextras"
+	strftime "github.com/moriyoshi/go-strftime"
 	logging "github.com/op/go-logging"
 	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
 	"io"
@@ -15,8 +17,6 @@ import (
 	"runtime/pprof"
 	"strings"
 	"time"
-	strftime "github.com/moriyoshi/go-strftime"
-	ioextras "github.com/moriyoshi/go-ioextras"
 )
 
 type FluentdForwarderParams struct {
@@ -125,7 +125,9 @@ func ParseArgs() *FluentdForwarderParams {
 		case "td+http", "td+https":
 			outputType = "td"
 			forwardTo = u.Host
-			apiKey = u.User.Username()
+			if u.User != nil {
+				apiKey = u.User.Username()
+			}
 			if u.Scheme == "td+https" {
 				ssl = true
 			}
@@ -213,24 +215,24 @@ func main() {
 	logWriter := (io.Writer)(nil)
 	if params.LogFile != "" {
 		logWriter = ioextras.NewStaticRotatingWriter(
-			func (_ interface{}) (string, error) {
+			func(_ interface{}) (string, error) {
 				path := strftime.Format(params.LogFile, time.Now())
 				return path, nil
 			},
-			func (path string, _ interface{}) (io.Writer, error) {
+			func(path string, _ interface{}) (io.Writer, error) {
 				dir, _ := filepath.Split(path)
 				err := os.MkdirAll(dir, os.FileMode(0777))
 				if err != nil {
 					return nil, err
 				}
-				return os.OpenFile(path, os.O_CREATE | os.O_APPEND | os.O_WRONLY, os.FileMode(0666))
+				return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.FileMode(0666))
 			},
 			nil,
 		)
 	} else {
 		logWriter = os.Stderr
 	}
-	logBackend := logging.NewLogBackend(logWriter, "[fluentd-forwarder] ", log.Ldate | log.Ltime | log.Lmicroseconds)
+	logBackend := logging.NewLogBackend(logWriter, "[fluentd-forwarder] ", log.Ldate|log.Ltime|log.Lmicroseconds)
 	logging.SetBackend(logBackend)
 	logger := logging.MustGetLogger("fluentd-forwarder")
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
