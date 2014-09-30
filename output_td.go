@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/x509"
 	"errors"
+	ioextras "github.com/moriyoshi/go-ioextras"
 	logging "github.com/op/go-logging"
 	td_client "github.com/treasure-data/td-client-go"
 	"github.com/ugorji/go/codec"
@@ -35,7 +36,7 @@ type tdOutputSpoolerDaemon struct {
 	shutdownChan chan struct{}
 	spoolersMtx  sync.Mutex
 	spoolers     map[string]*tdOutputSpooler
-	tempFactory  TempFileRandomAccessStoreFactory
+	tempFactory  ioextras.TempFileRandomAccessStoreFactory
 	wg           sync.WaitGroup
 	endNotify    func(*tdOutputSpoolerDaemon)
 }
@@ -250,7 +251,7 @@ func newTDOutputSpoolerDaemon(output *TDOutput) *tdOutputSpoolerDaemon {
 		output:       output,
 		shutdownChan: make(chan struct{}, 1),
 		spoolers:     make(map[string]*tdOutputSpooler),
-		tempFactory:  TempFileRandomAccessStoreFactory{output.tempDir, "", output.gcChan},
+		tempFactory:  ioextras.TempFileRandomAccessStoreFactory{output.tempDir, "", output.gcChan},
 		wg:           sync.WaitGroup{},
 		endNotify: func(*tdOutputSpoolerDaemon) {
 			close(output.gcChan)

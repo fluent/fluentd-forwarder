@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"errors"
+	ioextras "github.com/moriyoshi/go-ioextras"
 	td_client "github.com/treasure-data/td-client-go"
 	"hash"
 	"io"
@@ -16,7 +17,7 @@ type CompressingBlob struct {
 	level       int
 	bufferSize  int
 	reader      *CompressingBlobReader
-	tempFactory RandomAccessStoreFactory
+	tempFactory ioextras.RandomAccessStoreFactory
 	md5sum      []byte
 	size        int64
 }
@@ -25,9 +26,9 @@ type CompressingBlobReader struct {
 	buf             []byte // ring buffer
 	o               int
 	src             io.ReadCloser
-	dst             *StoreReadWriter
-	s               SizedRandomAccessStore
-	w               *StoreReadWriter
+	dst             *ioextras.StoreReadWriter
+	s               ioextras.SizedRandomAccessStore
+	w               *ioextras.StoreReadWriter
 	bw              *bufio.Writer
 	cw              *gzip.Writer
 	h               hash.Hash
@@ -244,7 +245,7 @@ func (reader *CompressingBlobReader) md5sum() ([]byte, error) {
 func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 	err := (error)(nil)
 	src := (io.ReadCloser)(nil)
-	s := (SizedRandomAccessStore)(nil)
+	s := (ioextras.SizedRandomAccessStore)(nil)
 	defer func() {
 		if err != nil {
 			if src != nil {
@@ -263,9 +264,9 @@ func (blob *CompressingBlob) newReader() (*CompressingBlobReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	s = s_.(SizedRandomAccessStore)
-	w := &StoreReadWriter{s, 0, -1}
-	dst := &StoreReadWriter{s, 0, -1}
+	s = s_.(ioextras.SizedRandomAccessStore)
+	w := &ioextras.StoreReadWriter{s, 0, -1}
+	dst := &ioextras.StoreReadWriter{s, 0, -1}
 	// assuming average compression ratio to be 1/3
 	writeBufferSize := maxInt(4096, blob.bufferSize/3)
 	bw := bufio.NewWriterSize(w, writeBufferSize)
@@ -358,7 +359,7 @@ func (blob *CompressingBlob) Dispose() error {
 	return nil
 }
 
-func NewCompressingBlob(blob td_client.Blob, bufferSize int, level int, tempFactory RandomAccessStoreFactory) *CompressingBlob {
+func NewCompressingBlob(blob td_client.Blob, bufferSize int, level int, tempFactory ioextras.RandomAccessStoreFactory) *CompressingBlob {
 	return &CompressingBlob{
 		inner:       blob,
 		level:       level,
