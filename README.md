@@ -149,7 +149,7 @@ Command-line Options
 Configuration File
 ------------------
 
-The syntax of the configuration file is so-called INI format with the name of the primary section being `fluentd-forwarder`.  Each setting is named exactly the same as those of command-line options, except for `-config`. (It is not possible to refer to another configuation file from a configuration file)
+The syntax of the configuration file is so-called INI format with the name of the primary section being `fluentd-forwarder`.  Each setting is named exactly the same as the command-line counterpart, except for `-config`. (It is not possible to refer to another configuation file from a configuration file)
 
 ```
 [fluentd-forwarder]
