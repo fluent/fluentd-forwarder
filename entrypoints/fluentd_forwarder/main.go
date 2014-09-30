@@ -1,14 +1,14 @@
 package main
 
 import (
+	gcfg "code.google.com/p/gcfg"
 	"crypto/x509"
 	"flag"
 	"fmt"
+	strftime "github.com/jehiah/go-strftime"
 	ioextras "github.com/moriyoshi/go-ioextras"
-	strftime "github.com/moriyoshi/go-strftime"
 	logging "github.com/op/go-logging"
 	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
-	gcfg "code.google.com/p/gcfg"
 	"io"
 	"io/ioutil"
 	"log"
@@ -79,18 +79,18 @@ func (v *LogLevelValue) Set(s string) error {
 func updateFlagsByConfig(configFile string, flagSet *flag.FlagSet) error {
 	config := struct {
 		Fluentd_Forwarder struct {
-			Retry_interval string `retry-interval`
-			Conn_timeout string `conn-timeout`
-			Write_timeout string `write-timeout`
-			Flush_interval string `flush-interval`
-			Listen_on string `listen-on`
-			To string `to`
-			Buffer_path string `buffer-path`
+			Retry_interval     string `retry-interval`
+			Conn_timeout       string `conn-timeout`
+			Write_timeout      string `write-timeout`
+			Flush_interval     string `flush-interval`
+			Listen_on          string `listen-on`
+			To                 string `to`
+			Buffer_path        string `buffer-path`
 			Buffer_chunk_limit string `buffer-chunk-limit`
-			Log_level string `log-level`
-			Ca_certs string `ca-certs`
-			Cpuprofile string `cpuprofile`
-			Log_file string `log-file`
+			Log_level          string `log-level`
+			Ca_certs           string `ca-certs`
+			Cpuprofile         string `cpuprofile`
+			Log_file           string `log-file`
 		}
 	}{}
 	err := gcfg.ReadFileInto(&config, configFile)

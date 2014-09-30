@@ -166,6 +166,6 @@ fluentd_forwarder depends on the following external libraries:
 
 * github.com/ugorji/go/codec
 * github.com/op/go-logging
-* github.com/moriyoshi/go-strftime (is a fork of github.com/jehiah/go-strftime)
+* github.com/jehiah/go-strftime
 * github.com/moriyoshi/go-ioextras
 * code.google.com/p/gcfg
