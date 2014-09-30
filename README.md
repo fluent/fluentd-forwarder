@@ -143,6 +143,7 @@ Command-line Options
 
   ```
   -config /etc/fluentd-forwarder/fluentd-forwarder.cfg
+  ```
 
 
 Configuration File
