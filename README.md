@@ -129,6 +129,35 @@ Command-line Options
   -log-level DEBUG
   ```
 
+* -log-file
+
+  Species the path to the log file.  By default logging is performed to the standard error.  It may contain strftime(3)-like format specifications like %Y in any positions.  If the parent directory doesn't exist at the time the logging is performed, all the leading directories are created automatically so you can specify the path like `/var/log/fluentd_forwarder/%Y-%m-%d/fluentd_forwarder.log`
+
+  ```
+  -log-file /var/log/fluentd_forwarder.log
+  ```
+
+* -config
+
+  Specifies the path to the configuration file.  The syntax is detailed below.
+
+  ```
+  -config /etc/fluentd-forwarder/fluentd-forwarder.cfg
+
+
+Configuration File
+------------------
+
+The syntax of the configuration file is so-called INI format with the name of the primary section being `fluentd-forwarder`.  Each setting is named exactly the same as those of command-line options, except for `-config`. (It is not possible to refer to another configuation file from a configuration file)
+
+```
+[fluentd-forwarder]
+to = fluent://remote.local:24224
+buffer-chunk-limit = 16777216
+flush-interval = 10s
+retry-interval = 1s
+```
+
 Dependencies
 ------------
 
@@ -136,3 +165,6 @@ fluentd_forwarder depends on the following external libraries:
 
 * github.com/ugorji/go/codec
 * github.com/op/go-logging
+* github.com/moriyoshi/go-strftime (is a fork of github.com/jehiah/go-strftime)
+* github.com/moriyoshi/go-ioextras
+* code.google.com/p/gcfg
