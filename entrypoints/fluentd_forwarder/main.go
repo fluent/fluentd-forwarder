@@ -8,12 +8,14 @@ import (
 	strftime "github.com/moriyoshi/go-strftime"
 	logging "github.com/op/go-logging"
 	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
+	gcfg "code.google.com/p/gcfg"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/pprof"
 	"strings"
 	"time"
@@ -74,7 +76,45 @@ func (v *LogLevelValue) Set(s string) error {
 	return err
 }
 
+func updateFlagsByConfig(configFile string, flagSet *flag.FlagSet) error {
+	config := struct {
+		Fluentd_Forwarder struct {
+			Retry_interval string `retry-interval`
+			Conn_timeout string `conn-timeout`
+			Write_timeout string `write-timeout`
+			Flush_interval string `flush-interval`
+			Listen_on string `listen-on`
+			To string `to`
+			Buffer_path string `buffer-path`
+			Buffer_chunk_limit string `buffer-chunk-limit`
+			Log_level string `log-level`
+			Ca_certs string `ca-certs`
+			Cpuprofile string `cpuprofile`
+			Log_file string `log-file`
+		}
+	}{}
+	err := gcfg.ReadFileInto(&config, configFile)
+	if err != nil {
+		return err
+	}
+	r := reflect.ValueOf(config.Fluentd_Forwarder)
+	rt := r.Type()
+	for i, l := 0, rt.NumField(); i < l; i += 1 {
+		f := rt.Field(i)
+		fv := r.Field(i)
+		v := fv.String()
+		if v != "" {
+			err := flagSet.Set(string(f.Tag), v)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func ParseArgs() *FluentdForwarderParams {
+	configFile := ""
 	retryInterval := (time.Duration)(0)
 	connectionTimeout := (time.Duration)(0)
 	writeTimeout := (time.Duration)(0)
@@ -91,6 +131,7 @@ func ParseArgs() *FluentdForwarderParams {
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
+	flagSet.StringVar(&configFile, "config", "", "configuration file")
 	flagSet.DurationVar(&retryInterval, "retry-interval", 0, "retry interval in which connection is tried against the remote agent")
 	flagSet.DurationVar(&connectionTimeout, "conn-timeout", MustParseDuration("10s"), "connection timeout")
 	flagSet.DurationVar(&writeTimeout, "write-timeout", MustParseDuration("10s"), "write timeout on wire")
@@ -105,6 +146,12 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
 	flagSet.StringVar(&logFile, "log-file", "", "path of the log file. log will be written to stderr if unspecified")
 	flagSet.Parse(os.Args[1:])
+
+	err := updateFlagsByConfig(configFile, flagSet)
+	if err != nil {
+		Error("%s", err.Error())
+		os.Exit(1)
+	}
 
 	ssl := false
 	outputType := ""
