@@ -147,10 +147,12 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.StringVar(&logFile, "log-file", "", "path of the log file. log will be written to stderr if unspecified")
 	flagSet.Parse(os.Args[1:])
 
-	err := updateFlagsByConfig(configFile, flagSet)
-	if err != nil {
-		Error("%s", err.Error())
-		os.Exit(1)
+	if configFile != "" {
+		err := updateFlagsByConfig(configFile, flagSet)
+		if err != nil {
+			Error("%s", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	ssl := false
