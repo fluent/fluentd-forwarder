@@ -179,5 +179,5 @@ The source code and its derivatives, unless otherwise specified, are licensed un
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the License for the specific language governing permissions and limitations under the License.
 
-A portion of the code originally written by Moriyoshi Koizumi and later modified by Treasure Data, Inc. continues to be published and distributed under the same terms as the MIT license as specified at the top of the applicable source files, with the both being the copyright holders of those.
+A portion of the code originally written by Moriyoshi Koizumi and later modified by Treasure Data, Inc. continues to be published and distributed under the same terms and conditions as the MIT license as specified at the top of the applicable source files, with the both being the copyright holders of those.
 
