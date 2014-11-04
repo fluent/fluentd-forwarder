@@ -1,7 +1,7 @@
 fluentd-forwarder
 =================
 
-Lightweight fluentd forwarder written in Go.
+A lightweight Fluentd forwarder written in Go.
 
 Build Instructions
 ------------------
@@ -13,6 +13,8 @@ get `fluentd_forwarder` under `$GOPATH/bin` directory.
 $ go get github.com/treasure-data/fluentd-forwarder/entrypoints/build
 $ bin/build fluentd_forwarder
 ```
+
+**Use Go v1.3 or above**.
 
 Running `fluentd_forwarder`
 ---------------------------
