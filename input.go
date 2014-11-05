@@ -29,7 +29,6 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 )
 
 type forwardClient struct {
@@ -52,7 +51,7 @@ type ForwardInput struct {
 	wg             sync.WaitGroup
 	acceptChan     chan *net.TCPConn
 	shutdownChan   chan struct{}
-	isShuttingDown unsafe.Pointer
+	isShuttingDown uintptr
 }
 
 type EntryCountTopic struct{}
@@ -317,7 +316,7 @@ func (input *ForwardInput) WaitForShutdown() {
 }
 
 func (input *ForwardInput) Stop() {
-	if atomic.CompareAndSwapPointer(&input.isShuttingDown, unsafe.Pointer(uintptr(0)), unsafe.Pointer(uintptr(1))) {
+	if atomic.CompareAndSwapUintptr(&input.isShuttingDown, uintptr(0), uintptr(1)) {
 		input.shutdownChan <- struct{}{}
 	}
 }
@@ -348,6 +347,6 @@ func NewForwardInput(logger *logging.Logger, bind string, port Port) (*ForwardIn
 		wg:             sync.WaitGroup{},
 		acceptChan:     make(chan *net.TCPConn),
 		shutdownChan:   make(chan struct{}),
-		isShuttingDown: unsafe.Pointer(uintptr(0)),
+		isShuttingDown: uintptr(0),
 	}, nil
 }
