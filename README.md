@@ -10,7 +10,7 @@ Set GOPATH environment variable appropriately and do the following to
 get `fluentd_forwarder` under `$GOPATH/bin` directory.
 
 ```
-$ go get github.com/treasure-data/fluentd-forwarder/entrypoints/build
+$ go get github.com/fluent/fluentd-forwarder/entrypoints/build
 $ bin/build fluentd_forwarder
 ```
 
