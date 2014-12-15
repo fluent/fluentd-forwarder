@@ -10,8 +10,8 @@ Set GOPATH environment variable appropriately and do the following to
 get `fluentd_forwarder` under `$GOPATH/bin` directory.
 
 ```
-$ go get github.com/fluent/fluentd-forwarder/entrypoints/build
-$ bin/build fluentd_forwarder
+$ go get github.com/fluent/fluentd-forwarder/entrypoints/build_fluentd_forwarder
+$ bin/build_fluentd_forwarder fluentd_forwarder
 ```
 
 **Use Go v1.3 or above**.
