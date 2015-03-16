@@ -2,13 +2,13 @@
 // Fluentd Forwarder
 //
 // Copyright (C) 2014 Treasure Data, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,7 @@
 // limitations under the License.
 //
 
-package fluentd_forwarder
+package main
 
 import (
 	"bytes"
@@ -48,6 +48,7 @@ type ForwardOutput struct {
 	journalGroup         JournalGroup
 	journal              Journal
 	emitterChan          chan FluentRecordSet
+	emitterChanRaw       chan FluentRecordBuf
 	spoolerShutdownChan  chan struct{}
 	isShuttingDown       uintptr
 	completion           sync.Cond
@@ -171,6 +172,10 @@ func (output *ForwardOutput) spawnSpooler() {
 	}()
 }
 
+func (buf FluentRecordBuf) Bytes() []byte {
+	return buf.Data[0:buf.Length]
+}
+
 func (output *ForwardOutput) spawnEmitter() {
 	output.logger.Notice("Spawning emitter")
 	output.wg.Add(1)
@@ -180,17 +185,29 @@ func (output *ForwardOutput) spawnEmitter() {
 			output.wg.Done()
 		}()
 		output.logger.Notice("Emitter started")
-		buffer := bytes.Buffer{}
-		for recordSet := range output.emitterChan {
-			buffer.Reset()
-			encoder := codec.NewEncoder(&buffer, output.codec)
-			err := encodeRecordSet(encoder, recordSet)
-			if err != nil {
-				output.logger.Error("%s", err.Error())
-				continue
+
+		select {
+		case <- output.emitterChanRaw:
+			output.logger.Notice("Emitter chan RAW <- SELECT!")
+
+			buf := <- output.emitterChanRaw
+			output.logger.Notice("journal to write %d bytes", buf.Length)
+			output.journal.Write(buf.Bytes())
+
+		case <- output.emitterChan:
+			buffer := bytes.Buffer{}
+			for recordSet := range output.emitterChan {
+				buffer.Reset()
+				encoder := codec.NewEncoder(&buffer, output.codec)
+				err := encodeRecordSet(encoder, recordSet)
+				if err != nil {
+					output.logger.Error("%s", err.Error())
+					continue
+				}
+				output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
+				output.journal.Write(buffer.Bytes())
+
 			}
-			output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
-			output.journal.Write(buffer.Bytes())
 		}
 		output.logger.Notice("Emitter ended")
 	}()
@@ -203,6 +220,16 @@ func (output *ForwardOutput) Emit(recordSets []FluentRecordSet) error {
 	for _, recordSet := range recordSets {
 		output.emitterChan <- recordSet
 	}
+	return nil
+}
+
+func (output *ForwardOutput) EmitRaw(recordBuf FluentRecordBuf) error {
+	defer func() {
+		recover()
+	}()
+
+	output.emitterChanRaw <- recordBuf
+
 	return nil
 }
 
@@ -267,6 +294,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		wg:                   sync.WaitGroup{},
 		flushInterval:        flushInterval,
 		emitterChan:          make(chan FluentRecordSet),
+		emitterChanRaw:       make(chan FluentRecordBuf),
 		spoolerShutdownChan:  make(chan struct{}),
 		isShuttingDown:       0,
 		completion:           sync.Cond{L: &sync.Mutex{}},

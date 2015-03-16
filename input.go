@@ -2,13 +2,13 @@
 // Fluentd Forwarder
 //
 // Copyright (C) 2014 Treasure Data, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,7 @@
 // limitations under the License.
 //
 
-package fluentd_forwarder
+package main
 
 import (
 	"bufio"
@@ -31,6 +31,9 @@ import (
 	"sync/atomic"
 )
 
+// Forward client performing data validation: upon data retrieval, it
+// unpack the MsgPack and validate each entry before to forward it
+// to the Output.
 type forwardClient struct {
 	input  *ForwardInput
 	logger *logging.Logger
@@ -52,6 +55,7 @@ type ForwardInput struct {
 	acceptChan     chan *net.TCPConn
 	shutdownChan   chan struct{}
 	isShuttingDown uintptr
+	isLightweight  bool
 }
 
 type EntryCountTopic struct{}
@@ -85,7 +89,7 @@ func (c *forwardClient) decodeRecordSet(tag []byte, entries []interface{}) (Flue
 		data, ok := entry[1].(map[string]interface{})
 		if !ok {
 			return FluentRecordSet{}, errors.New("Failed to decode data field")
-		}
+ 		}
 		coerceInPlace(data)
 		records[i] = TinyFluentRecord{
 			Timestamp: timestamp,
@@ -215,6 +219,59 @@ func (c *forwardClient) startHandling() {
 	}()
 }
 
+func (c *forwardClient) startHandlingRaw() {
+	c.input.wg.Add(1)
+	r := bufio.NewReader(c.conn)
+
+	go func() {
+		defer func() {
+			err := c.conn.Close()
+			if err != nil {
+				c.logger.Debug("Close: %s", err.Error())
+			}
+
+			c.input.markDischarged(c)
+			c.input.wg.Done()
+		}()
+		c.input.logger.Info("Started handling connection from %s", c.conn.RemoteAddr().String())
+
+		for {
+			buf := FluentRecordBuf {}
+			n, err := r.Read(buf.Data[:8191])
+			c.logger.Debug("Read: %d bytes ", n)
+
+			if err != nil {
+				err_, ok := err.(net.Error)
+				if ok {
+					if err_.Temporary() {
+						c.logger.Info("Temporary failure: %s", err_.Error())
+						continue
+					}
+				}
+				if err == io.EOF {
+					c.logger.Info("Client %s closed the connection", c.conn.RemoteAddr().String())
+				} else {
+					c.logger.Error(err.Error())
+				}
+				break
+			}
+
+			if n > 0 {
+				buf.Length = n
+				err_ := c.input.port.EmitRaw(buf)
+				if err_ != nil {
+					fmt.Printf("emit raw!!!!\n")
+					c.logger.Debug("EmitRaw: %s", err_.Error())
+				} else {
+
+				}
+
+			}
+		}
+		c.logger.Debug("Ending HandlingRaw")
+	}()
+}
+
 func (c *forwardClient) shutdown() {
 	err := c.conn.Close()
 	if err != nil {
@@ -222,13 +279,15 @@ func (c *forwardClient) shutdown() {
 	}
 }
 
-func newForwardClient(input *ForwardInput, logger *logging.Logger, conn *net.TCPConn, _codec *codec.MsgpackHandle) *forwardClient {
+func newForwardClient(input *ForwardInput, logger *logging.Logger,
+	conn *net.TCPConn, _codec *codec.MsgpackHandle) *forwardClient {
+
 	c := &forwardClient{
 		input:  input,
 		logger: logger,
 		conn:   conn,
 		codec:  _codec,
-		dec:    codec.NewDecoder(bufio.NewReader(conn), _codec),
+		dec:    nil,//codec.NewDecoder(bufio.NewReader(conn), _codec),
 	}
 	input.markCharged(c)
 	return c
@@ -276,7 +335,13 @@ func (input *ForwardInput) spawnDaemon() {
 			case conn := <-input.acceptChan:
 				if conn != nil {
 					input.logger.Notice("Got conn from acceptChan")
-					newForwardClient(input, input.logger, conn, input.codec).startHandling()
+					// New connection accepted
+					fw_client := newForwardClient(
+						input,
+						input.logger,
+						conn,
+						input.codec)
+					fw_client.startHandlingRaw()
 				}
 			case <-input.shutdownChan:
 				input.listener.Close()
@@ -321,10 +386,9 @@ func (input *ForwardInput) Stop() {
 	}
 }
 
-func NewForwardInput(logger *logging.Logger, bind string, port Port) (*ForwardInput, error) {
-	_codec := codec.MsgpackHandle{}
-	_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
-	_codec.RawToString = false
+func NewForwardInput(logger *logging.Logger, bind string,
+	port Port, is_lightweight bool) (*ForwardInput, error) {
+
 	addr, err := net.ResolveTCPAddr("tcp", bind)
 	if err != nil {
 		logger.Error("%s", err.Error())
@@ -335,6 +399,16 @@ func NewForwardInput(logger *logging.Logger, bind string, port Port) (*ForwardIn
 		logger.Error("%s", err.Error())
 		return nil, err
 	}
+
+	//if is_lightweight == false {
+		_codec := codec.MsgpackHandle{}
+		_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
+		_codec.RawToString = false
+	//} else {
+
+	//}
+
+
 	return &ForwardInput{
 		port:           port,
 		logger:         logger,
@@ -348,5 +422,6 @@ func NewForwardInput(logger *logging.Logger, bind string, port Port) (*ForwardIn
 		acceptChan:     make(chan *net.TCPConn),
 		shutdownChan:   make(chan struct{}),
 		isShuttingDown: uintptr(0),
+		isLightweight:  is_lightweight,
 	}, nil
 }

@@ -8,7 +8,7 @@ import (
 	strftime "github.com/jehiah/go-strftime"
 	ioextras "github.com/moriyoshi/go-ioextras"
 	logging "github.com/op/go-logging"
-	fluentd_forwarder "github.com/treasure-data/fluentd-forwarder"
+	//fluentd_forwarder "github.com/fluent/fluentd-forwarder"
 	"io"
 	"io/ioutil"
 	"log"
@@ -16,10 +16,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime/pprof"
+	"net/http"
 	"strings"
 	"time"
 )
+
+import _ "net/http/pprof"
 
 type FluentdForwarderParams struct {
 	RetryInterval       time.Duration
@@ -40,11 +42,12 @@ type FluentdForwarderParams struct {
 	Ssl                 bool
 	SslCACertBundleFile string
 	CPUProfileFile      string
+	Lightweight         bool
 }
 
 type PortWorker interface {
-	fluentd_forwarder.Port
-	fluentd_forwarder.Worker
+	Port
+	Worker
 }
 
 var progName = os.Args[0]
@@ -128,7 +131,7 @@ func ParseArgs() *FluentdForwarderParams {
 	sslCACertBundleFile := ""
 	cpuProfileFile := ""
 	logFile := ""
-
+	lightweight := false
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
 	flagSet.StringVar(&configFile, "config", "", "configuration file")
@@ -144,6 +147,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.Var(&logLevel, "log-level", "log level (defaults to INFO)")
 	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
 	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
+	flagSet.BoolVar(&lightweight, "lightweight", false, "lightweight mode, do not validate input")
 	flagSet.StringVar(&logFile, "log-file", "", "path of the log file. log will be written to stderr if unspecified")
 	flagSet.Parse(os.Args[1:])
 
@@ -218,6 +222,7 @@ func ParseArgs() *FluentdForwarderParams {
 		LogFile:             logFile,
 		SslCACertBundleFile: sslCACertBundleFile,
 		CPUProfileFile:      cpuProfileFile,
+	        Lightweight:         lightweight,
 	}
 }
 
@@ -257,6 +262,10 @@ func ValidateParams(params *FluentdForwarderParams) bool {
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	params := ParseArgs()
 	if !ValidateParams(params) {
 		os.Exit(1)
@@ -289,23 +298,23 @@ func main() {
 		logger.Info("Version %s starting...", progVersion)
 	}
 
-	workerSet := fluentd_forwarder.NewWorkerSet()
+	workerSet := NewWorkerSet()
 
 	if params.CPUProfileFile != "" {
-		f, err := os.Create(params.CPUProfileFile)
-		if err != nil {
-			Error(err.Error())
-			os.Exit(1)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
+		//f, err := os.Create(params.CPUProfileFile)
+		//if err != nil {
+		//	Error(err.Error())
+		//	os.Exit(1)
+		//}
+		//pprof.StartCPUProfile(f)
+		//defer pprof.StopCPUProfile()
 	}
 
 	output := (PortWorker)(nil)
 	err := (error)(nil)
 	switch params.OutputType {
 	case "fluent":
-		output, err = fluentd_forwarder.NewForwardOutput(
+		output, err = NewForwardOutput(
 			logger,
 			params.ForwardTo,
 			params.RetryInterval,
@@ -329,7 +338,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		output, err = fluentd_forwarder.NewTDOutput(
+		output, err = NewTDOutput(
 			logger,
 			params.ForwardTo,
 			params.ConnectionTimeout,
@@ -352,7 +361,13 @@ func main() {
 		return
 	}
 	workerSet.Add(output)
-	input, err := fluentd_forwarder.NewForwardInput(logger, params.ListenOn, output)
+
+	// Start the forwarder
+	input, err := NewForwardInput(logger,
+		params.ListenOn,
+		output,
+		params.Lightweight)
+
 	if err != nil {
 		Error(err.Error())
 		return

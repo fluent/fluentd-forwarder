@@ -16,7 +16,7 @@
 // limitations under the License.
 //
 
-package fluentd_forwarder
+package main
 
 func maxInt(a, b int) int {
 	if a >= b {

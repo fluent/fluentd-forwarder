@@ -21,7 +21,7 @@
 // THE SOFTWARE.
 //
 
-package fluentd_forwarder
+package main
 
 import (
 	"bufio"

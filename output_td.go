@@ -2,13 +2,13 @@
 // Fluentd Forwarder
 //
 // Copyright (C) 2014 Treasure Data, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,7 @@
 // limitations under the License.
 //
 
-package fluentd_forwarder
+package main
 
 import (
 	"bytes"
@@ -71,6 +71,7 @@ type TDOutput struct {
 	wg                   sync.WaitGroup
 	journalGroup         JournalGroup
 	emitterChan          chan FluentRecordSet
+	emitterChanRaw       chan FluentRecordBuf
 	spoolerDaemon        *tdOutputSpoolerDaemon
 	isShuttingDown       uintptr
 	client               *td_client.TDClient
@@ -378,6 +379,15 @@ func (output *TDOutput) Emit(recordSets []FluentRecordSet) error {
 	return nil
 }
 
+func (output *TDOutput) EmitRaw(recordBuf FluentRecordBuf) error {
+	defer func() {
+		recover()
+	}()
+
+	output.emitterChanRaw <- recordBuf
+	return nil
+}
+
 func (output *TDOutput) String() string {
 	return "output"
 }
@@ -473,6 +483,7 @@ func NewTDOutput(
 		wg:                   sync.WaitGroup{},
 		flushInterval:        flushInterval,
 		emitterChan:          make(chan FluentRecordSet),
+	        emitterChanRaw:       make(chan FluentRecordBuf),
 		isShuttingDown:       0,
 		client:               client,
 		databaseName:         databaseName,
