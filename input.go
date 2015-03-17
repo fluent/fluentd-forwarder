@@ -221,7 +221,6 @@ func (c *forwardClient) startHandling() {
 
 func (c *forwardClient) startHandlingRaw() {
 	c.input.wg.Add(1)
-	r := bufio.NewReader(c.conn)
 
 	go func() {
 		defer func() {
@@ -235,9 +234,11 @@ func (c *forwardClient) startHandlingRaw() {
 		}()
 		c.input.logger.Info("Started handling connection from %s", c.conn.RemoteAddr().String())
 
+		r := bufio.NewReader(c.conn)
+		buf := FluentRecordBuf {}
 		for {
-			buf := FluentRecordBuf {}
 			n, err := r.Read(buf.Data[:8191])
+			buf.Length = n
 			c.logger.Debug("Read: %d bytes ", n)
 
 			if err != nil {
@@ -257,7 +258,6 @@ func (c *forwardClient) startHandlingRaw() {
 			}
 
 			if n > 0 {
-				buf.Length = n
 				err_ := c.input.port.EmitRaw(buf)
 				if err_ != nil {
 					fmt.Printf("emit raw!!!!\n")
@@ -268,7 +268,6 @@ func (c *forwardClient) startHandlingRaw() {
 
 			}
 		}
-		c.logger.Debug("Ending HandlingRaw")
 	}()
 }
 
@@ -282,12 +281,17 @@ func (c *forwardClient) shutdown() {
 func newForwardClient(input *ForwardInput, logger *logging.Logger,
 	conn *net.TCPConn, _codec *codec.MsgpackHandle) *forwardClient {
 
+	var decoder *codec.Decoder
+	if input.isLightweight == false {
+		decoder = codec.NewDecoder(bufio.NewReader(conn), _codec)
+	}
+
 	c := &forwardClient{
 		input:  input,
 		logger: logger,
 		conn:   conn,
 		codec:  _codec,
-		dec:    nil,//codec.NewDecoder(bufio.NewReader(conn), _codec),
+		dec:    decoder,
 	}
 	input.markCharged(c)
 	return c
@@ -341,7 +345,12 @@ func (input *ForwardInput) spawnDaemon() {
 						input.logger,
 						conn,
 						input.codec)
-					fw_client.startHandlingRaw()
+
+					if input.isLightweight == true {
+						fw_client.startHandlingRaw()
+					} else {
+						fw_client.startHandling()
+					}
 				}
 			case <-input.shutdownChan:
 				input.listener.Close()
@@ -400,14 +409,12 @@ func NewForwardInput(logger *logging.Logger, bind string,
 		return nil, err
 	}
 
-	//if is_lightweight == false {
-		_codec := codec.MsgpackHandle{}
+	var _codec codec.MsgpackHandle
+	if is_lightweight == false {
+		_codec = codec.MsgpackHandle{}
 		_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
 		_codec.RawToString = false
-	//} else {
-
-	//}
-
+	}
 
 	return &ForwardInput{
 		port:           port,
