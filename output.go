@@ -49,6 +49,7 @@ type ForwardOutput struct {
 	journal              Journal
 	emitterChan          chan FluentRecordSet
 	emitterChanRaw       chan FluentRecordBuf
+	emitterChanStop      chan bool
 	spoolerShutdownChan  chan struct{}
 	isShuttingDown       uintptr
 	completion           sync.Cond
@@ -179,6 +180,7 @@ func (buf FluentRecordBuf) Bytes() []byte {
 func (output *ForwardOutput) spawnEmitter() {
 	output.logger.Notice("Spawning emitter")
 	output.wg.Add(1)
+
 	go func() {
 		defer func() {
 			output.spoolerShutdownChan <- struct{}{}
@@ -188,6 +190,9 @@ func (output *ForwardOutput) spawnEmitter() {
 
 		for {
 			select {
+			case <- output.emitterChanStop:
+				return
+
 			case <- output.emitterChanRaw:
 				output.logger.Notice("Emitter chan RAW <- SELECT!")
 
@@ -241,6 +246,8 @@ func (output *ForwardOutput) String() string {
 func (output *ForwardOutput) Stop() {
 	if atomic.CompareAndSwapUintptr(&output.isShuttingDown, 0, 1) {
 		close(output.emitterChan)
+		close(output.emitterChanRaw)
+		close(output.emitterChanStop)
 	}
 }
 
@@ -296,6 +303,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		flushInterval:        flushInterval,
 		emitterChan:          make(chan FluentRecordSet),
 		emitterChanRaw:       make(chan FluentRecordBuf),
+		emitterChanStop:      make(chan bool),
 		spoolerShutdownChan:  make(chan struct{}),
 		isShuttingDown:       0,
 		completion:           sync.Cond{L: &sync.Mutex{}},
