@@ -8,7 +8,6 @@ import (
 	strftime "github.com/jehiah/go-strftime"
 	ioextras "github.com/moriyoshi/go-ioextras"
 	logging "github.com/op/go-logging"
-	//fluentd_forwarder "github.com/fluent/fluentd-forwarder"
 	"io"
 	"io/ioutil"
 	"log"

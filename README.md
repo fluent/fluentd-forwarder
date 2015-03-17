@@ -16,15 +16,16 @@ Build Instructions
 To install the required dependencies and build `fluentd_forwarder` do:
 
 ```
-$ go get github.com/fluent/fluentd-forwarder/entrypoints/build_fluentd_forwarder
-$ bin/build_fluentd_forwarder fluentd_forwarder
+$ cd $GOPATH
+$ go get -u github.com/fluent/fluentd-forwarder
+$ go install github.com/fluent/fluentd-forwarder
 ```
 
 Running `fluentd_forwarder`
 ---------------------------
 
 ```
-$ $GOPATH/bin/fluentd_forwarder
+$ $GOPATH/bin/fluentd-forwarder
 ```
 
 Without arguments, it simply listens on 127.0.0.1:24224 and forwards the events to 127.0.0.1:24225.
@@ -72,6 +73,14 @@ Command-line Options
   -flush-interval 5s
   ```
 
+* -lightweight=true|false
+
+  Enable or disable the lightweight mode. By default this mode is disabled, which means that each incoming Msgpack message is processed for validation, this is the recommended behavior as it make sure to process and dispatch only correct data. When enabled, _fluentd-forwarder_ behave more like a proxy without performing any validation. This mode may be required when is required to reduce the CPU usage by the service. This mode requires to specify a Tag from the command line (-tag option), also note that __no__ validation will be done and all data will be send to the specified output.
+
+  ```
+  -lightweight=true
+  ```
+
 * -listen-on
 
   Interface address and port on which the forwarder listens.
@@ -91,6 +100,14 @@ Command-line Options
   -to td+https://urlencoded-api-key@/database/*
   -to td+https://urlencoded-api-key@/database/table
   -to td+https://urlencoded-api-key@endpoint/*/*
+  ```
+
+* -tag
+
+  When using the lightweight mode (-lightweight=true), it's mandatory to specify a Tag. The reason it's that lightweight mode do not process Msgpack messages so is not aware about the output Tag that will be used on Treasure Data services.
+
+  ```
+  -tag treasure
   ```
 
 * -ca-certs
