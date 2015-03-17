@@ -194,8 +194,6 @@ func (output *ForwardOutput) spawnEmitter() {
 				return
 
 			case <- output.emitterChanRaw:
-				output.logger.Notice("Emitter chan RAW <- SELECT!")
-
 				buf := <- output.emitterChanRaw
 				output.logger.Notice("journal to write %d bytes", buf.Length)
 				output.journal.Write(buf.Bytes())

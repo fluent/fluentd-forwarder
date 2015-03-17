@@ -72,6 +72,7 @@ type TDOutput struct {
 	journalGroup         JournalGroup
 	emitterChan          chan FluentRecordSet
 	emitterChanRaw       chan FluentRecordBuf
+	emitterChanStop      chan bool
 	spoolerDaemon        *tdOutputSpoolerDaemon
 	isShuttingDown       uintptr
 	client               *td_client.TDClient
@@ -79,6 +80,7 @@ type TDOutput struct {
 	gcChan               chan *os.File
 	completion           sync.Cond
 	hasShutdownCompleted bool
+	tag                  string
 }
 
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
@@ -326,25 +328,45 @@ func (output *TDOutput) spawnEmitter() {
 			output.wg.Done()
 		}()
 		output.logger.Notice("Emitter started")
-		buffer := bytes.Buffer{}
-		for recordSet := range output.emitterChan {
-			buffer.Reset()
-			encoder := codec.NewEncoder(&buffer, output.codec)
-			err := func() error {
-				spooler, err := output.spoolerDaemon.getSpooler(recordSet.Tag)
+
+		for {
+			select {
+			case <- output.emitterChanStop:
+				return
+
+			case <- output.emitterChanRaw:
+				buf := <- output.emitterChanRaw
+				output.logger.Debug("Emitter processed %d entries", buf.Length)
+
+				spooler, err := output.spoolerDaemon.getSpooler(output.tag)
 				if err != nil {
-					return err
+					output.logger.Error("%s", err.Error())
+					return
 				}
-				err = encodeRecords(encoder, recordSet.Records)
-				if err != nil {
-					return err
+				spooler.journal.Write(buf.Bytes())
+
+			case <- output.emitterChan:
+				buffer := bytes.Buffer{}
+				for recordSet := range output.emitterChan {
+					buffer.Reset()
+					encoder := codec.NewEncoder(&buffer, output.codec)
+					err := func() error {
+						spooler, err := output.spoolerDaemon.getSpooler(recordSet.Tag)
+						if err != nil {
+							return err
+						}
+						err = encodeRecords(encoder, recordSet.Records)
+						if err != nil {
+							return err
+						}
+						output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
+						return spooler.journal.Write(buffer.Bytes())
+					}()
+					if err != nil {
+						output.logger.Error("%s", err.Error())
+						continue
+					}
 				}
-				output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
-				return spooler.journal.Write(buffer.Bytes())
-			}()
-			if err != nil {
-				output.logger.Error("%s", err.Error())
-				continue
 			}
 		}
 		output.logger.Notice("Emitter ended")
@@ -438,6 +460,7 @@ func NewTDOutput(
 	apiKey string,
 	databaseName string,
 	tableName string,
+	tag string,
 	tempDir string,
 	useSsl bool,
 	rootCAs *x509.CertPool,
@@ -484,6 +507,8 @@ func NewTDOutput(
 		flushInterval:        flushInterval,
 		emitterChan:          make(chan FluentRecordSet),
 	        emitterChanRaw:       make(chan FluentRecordBuf),
+		emitterChanStop:      make(chan bool),
+		tag:                  tag,
 		isShuttingDown:       0,
 		client:               client,
 		databaseName:         databaseName,

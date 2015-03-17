@@ -43,6 +43,7 @@ type FluentdForwarderParams struct {
 	SslCACertBundleFile string
 	CPUProfileFile      string
 	Lightweight         bool
+	Tag                 string
 }
 
 type PortWorker interface {
@@ -132,6 +133,7 @@ func ParseArgs() *FluentdForwarderParams {
 	cpuProfileFile := ""
 	logFile := ""
 	lightweight := false
+	tag := ""
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
 	flagSet.StringVar(&configFile, "config", "", "configuration file")
@@ -148,6 +150,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
 	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
 	flagSet.BoolVar(&lightweight, "lightweight", false, "lightweight mode, do not validate input")
+	flagSet.StringVar(&tag, "tag", "", "Specify an output Tag (required by lightweight mode)")
 	flagSet.StringVar(&logFile, "log-file", "", "path of the log file. log will be written to stderr if unspecified")
 	flagSet.Parse(os.Args[1:])
 
@@ -223,6 +226,7 @@ func ParseArgs() *FluentdForwarderParams {
 		SslCACertBundleFile: sslCACertBundleFile,
 		CPUProfileFile:      cpuProfileFile,
 	        Lightweight:         lightweight,
+		Tag:                 tag,
 	}
 }
 
@@ -243,6 +247,12 @@ func ValidateParams(params *FluentdForwarderParams) bool {
 		Error("Flush interval must be greater than or equal to 100ms")
 		return false
 	}
+
+	if params.Lightweight == true && len(params.Tag) <= 0 {
+		Error("Lightweight mode requires to specify a tag (e.g: -tag=treasure)")
+		return false
+	}
+
 	switch params.OutputType {
 	case "fluent":
 		if params.RetryInterval == 0 {
@@ -350,6 +360,7 @@ func main() {
 			params.ApiKey,
 			params.DatabaseName,
 			params.TableName,
+			params.Tag,
 			"",
 			params.Ssl,
 			rootCAs,
