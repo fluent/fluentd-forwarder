@@ -186,27 +186,28 @@ func (output *ForwardOutput) spawnEmitter() {
 		}()
 		output.logger.Notice("Emitter started")
 
-		select {
-		case <- output.emitterChanRaw:
-			output.logger.Notice("Emitter chan RAW <- SELECT!")
+		for {
+			select {
+			case <- output.emitterChanRaw:
+				output.logger.Notice("Emitter chan RAW <- SELECT!")
 
-			buf := <- output.emitterChanRaw
-			output.logger.Notice("journal to write %d bytes", buf.Length)
-			output.journal.Write(buf.Bytes())
+				buf := <- output.emitterChanRaw
+				output.logger.Notice("journal to write %d bytes", buf.Length)
+				output.journal.Write(buf.Bytes())
 
-		case <- output.emitterChan:
-			buffer := bytes.Buffer{}
-			for recordSet := range output.emitterChan {
-				buffer.Reset()
-				encoder := codec.NewEncoder(&buffer, output.codec)
-				err := encodeRecordSet(encoder, recordSet)
-				if err != nil {
-					output.logger.Error("%s", err.Error())
-					continue
+			case <- output.emitterChan:
+				buffer := bytes.Buffer{}
+				for recordSet := range output.emitterChan {
+					buffer.Reset()
+					encoder := codec.NewEncoder(&buffer, output.codec)
+					err := encodeRecordSet(encoder, recordSet)
+					if err != nil {
+						output.logger.Error("%s", err.Error())
+						continue
+					}
+					output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
+					output.journal.Write(buffer.Bytes())
 				}
-				output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
-				output.journal.Write(buffer.Bytes())
-
 			}
 		}
 		output.logger.Notice("Emitter ended")
