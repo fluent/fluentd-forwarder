@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
+	ioextras "github.com/moriyoshi/go-ioextras"
 	td_client "github.com/treasure-data/td-client-go"
 	"io/ioutil"
 	"testing"
@@ -29,7 +30,7 @@ import (
 
 func Test_CompressingBlob(t *testing.T) {
 	for bufSize := 2; bufSize <= 32; bufSize += 1 {
-		b := NewCompressingBlob(td_client.InMemoryBlob("testtesttesttest"), bufSize, gzip.DefaultCompression, &MemoryRandomAccessStoreFactory{})
+		b := NewCompressingBlob(td_client.InMemoryBlob("testtesttesttest"), bufSize, gzip.DefaultCompression, &ioextras.MemoryRandomAccessStoreFactory{})
 		r, err := b.Reader()
 		if err != nil {
 			t.Log(err.Error())
@@ -93,7 +94,7 @@ func Test_CompressingBlob(t *testing.T) {
 
 func Test_CompressingBlob_MD5Sum_before_reading(t *testing.T) {
 	for bufSize := 2; bufSize <= 32; bufSize += 1 {
-		b := NewCompressingBlob(td_client.InMemoryBlob("testtesttesttest"), bufSize, gzip.DefaultCompression, &MemoryRandomAccessStoreFactory{})
+		b := NewCompressingBlob(td_client.InMemoryBlob("testtesttesttest"), bufSize, gzip.DefaultCompression, &ioextras.MemoryRandomAccessStoreFactory{})
 		r, err := b.Reader()
 		if err != nil {
 			t.Log(err.Error())
