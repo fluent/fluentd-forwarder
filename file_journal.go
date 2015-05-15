@@ -736,6 +736,7 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 	if err != nil {
 		return nil, err
 	}
+	defer d.Close()
 	finfo, err := d.Stat()
 	if err != nil {
 		return nil, err
