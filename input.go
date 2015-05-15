@@ -40,6 +40,7 @@ type forwardClient struct {
 }
 
 type ForwardInput struct {
+	entries        int64  // This variable must be on 64-bit alignment. Otherwise atomic.AddInt64 will cause a crash on ARM and x86-32
 	port           Port
 	logger         *logging.Logger
 	bind           string
@@ -47,7 +48,6 @@ type ForwardInput struct {
 	codec          *codec.MsgpackHandle
 	clientsMtx     sync.Mutex
 	clients        map[*net.TCPConn]*forwardClient
-	entries        int64
 	wg             sync.WaitGroup
 	acceptChan     chan *net.TCPConn
 	shutdownChan   chan struct{}

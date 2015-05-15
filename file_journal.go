@@ -53,6 +53,7 @@ type FileJournalChunkDequeue struct {
 }
 
 type FileJournalChunk struct {
+	Size      int64 // This variable must be on 64-bit alignment. Otherwise atomic.AddInt64 will cause a crash on ARM and x86-32
 	head      FileJournalChunkDequeueHead
 	container *FileJournalChunkDequeue
 	Path      string
@@ -60,7 +61,6 @@ type FileJournalChunk struct {
 	TSuffix   string
 	Timestamp int64
 	UniqueId  []byte
-	Size      int64
 	refcount  int32
 	mtx       sync.Mutex
 }
