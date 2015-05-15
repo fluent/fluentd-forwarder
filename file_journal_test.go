@@ -485,6 +485,7 @@ func Test_Journal_FlushListener(t *testing.T) {
 		if err != nil {
 			t.FailNow()
 		}
+		defer reader.Close()
 		bytes, err := ioutil.ReadAll(reader)
 		if err != nil {
 			t.FailNow()
