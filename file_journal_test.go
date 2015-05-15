@@ -31,6 +31,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -69,6 +70,7 @@ func Test_GetJournalGroup(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -78,12 +80,13 @@ func Test_GetJournalGroup(t *testing.T) {
 		0,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup1, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup1, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
-	journalGroup2, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	journalGroup2, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.Fail()
 	}
@@ -95,7 +98,7 @@ func Test_GetJournalGroup(t *testing.T) {
 		t.Log("WTF?")
 		t.Fail()
 	}
-	_, err = factory.GetJournalGroup(tempDir+"/test", anotherDummyWorker)
+	_, err = factory.GetJournalGroup(tempFile, anotherDummyWorker)
 	if err == nil {
 		t.Fail()
 	}
@@ -108,6 +111,7 @@ func Test_Journal_GetJournal(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -117,8 +121,9 @@ func Test_Journal_GetJournal(t *testing.T) {
 		0,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
@@ -142,6 +147,7 @@ func Test_Journal_EmitVeryFirst(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -151,8 +157,9 @@ func Test_Journal_EmitVeryFirst(t *testing.T) {
 		10,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
@@ -177,6 +184,7 @@ func Test_Journal_EmitTwice(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -186,8 +194,9 @@ func Test_Journal_EmitTwice(t *testing.T) {
 		10,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
@@ -216,6 +225,7 @@ func Test_Journal_EmitRotating(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -225,8 +235,9 @@ func Test_Journal_EmitRotating(t *testing.T) {
 		8,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
@@ -280,7 +291,8 @@ func Test_Journal_Scanning_Ok(t *testing.T) {
 		if err != nil {
 			t.FailNow()
 		}
-		prefix := tempDir + "/test"
+		defer os.RemoveAll(tempDir)
+		prefix := filepath.Join(tempDir, "test")
 		suffix := ".log"
 		makePaths := func(n int, key string) []string {
 			paths := make([]string, n)
@@ -352,8 +364,9 @@ func Test_Journal_Scanning_MultipleHead(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	tm := time.Date(2014, 1, 1, 0, 0, 0, 0, time.UTC)
-	prefix := tempDir + "/test"
+	prefix := filepath.Join(tempDir, "test")
 	suffix := ".log"
 	createFile := func(key string, type_ JournalFileType, o int) (string, error) {
 		path := prefix + "." + BuildJournalPath(key, type_, tm.Add(time.Duration(-o*1e9)), 0).VariablePortion + suffix
@@ -426,6 +439,7 @@ func Test_Journal_FlushListener(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -435,8 +449,9 @@ func Test_Journal_FlushListener(t *testing.T) {
 		8,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
@@ -536,6 +551,7 @@ func Test_Journal_Concurrency(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
+	defer os.RemoveAll(tempDir)
 	factory := NewFileJournalGroupFactory(
 		logger,
 		rand.NewSource(0),
@@ -545,8 +561,9 @@ func Test_Journal_Concurrency(t *testing.T) {
 		16,
 	)
 	dummyWorker := &DummyWorker{}
-	t.Log(tempDir + "/test")
-	journalGroup, err := factory.GetJournalGroup(tempDir+"/test", dummyWorker)
+	tempFile := filepath.Join(tempDir, "test")
+	t.Log(tempFile)
+	journalGroup, err := factory.GetJournalGroup(tempFile, dummyWorker)
 	if err != nil {
 		t.FailNow()
 	}
