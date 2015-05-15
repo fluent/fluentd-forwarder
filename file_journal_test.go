@@ -338,6 +338,7 @@ func Test_Journal_Scanning_Ok(t *testing.T) {
 			j += 1
 		}
 		journal.Flush(nil)
+		os.RemoveAll(tempDir)
 		t.Logf("journal.chunks.count=%d", journal.chunks.count)
 		if journal.chunks.count != 1 {
 			t.Fail()
