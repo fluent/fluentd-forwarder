@@ -20,6 +20,7 @@ package fluentd_forwarder
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	logging "github.com/op/go-logging"
@@ -40,7 +41,7 @@ type forwardClient struct {
 }
 
 type ForwardInput struct {
-	entries        int64  // This variable must be on 64-bit alignment. Otherwise atomic.AddInt64 will cause a crash on ARM and x86-32
+	entries        int64 // This variable must be on 64-bit alignment. Otherwise atomic.AddInt64 will cause a crash on ARM and x86-32
 	port           Port
 	logger         *logging.Logger
 	bind           string
@@ -157,9 +158,17 @@ func (c *forwardClient) decodeEntries() ([]FluentRecordSet, error) {
 		retval = []FluentRecordSet{recordSet}
 	case []byte:
 		entries := make([]interface{}, 0)
-		err := codec.NewDecoderBytes(timestamp_or_entries, c.codec).Decode(&entries)
-		if err != nil {
-			return nil, err
+		reader := bytes.NewReader(timestamp_or_entries)
+		dec := codec.NewDecoder(reader, c.codec)
+		for reader.Len() > 0 { // codec.Decoder doesn't return EOF.
+			entry := []interface{}{}
+			if err != dec.Decode(&entry) {
+				if err == io.EOF { // in case codec.Decoder changes its behavior
+					break
+				}
+				return nil, err
+			}
+			entries = append(entries, entry)
 		}
 		recordSet, err := c.decodeRecordSet(tag, entries)
 		if err != nil {
