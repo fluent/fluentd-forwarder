@@ -1,0 +1,16 @@
+language: go
+
+go:
+  - 1.4
+
+before_install:
+  - go get github.com/ugorji/go/codec
+  - go get github.com/op/go-logging
+  - go get github.com/jehiah/go-strftime
+  - go get github.com/moriyoshi/go-ioextras
+  - go get code.google.com/p/gcfg
+  - go get github.com/treasure-data/td-client-go
+
+script:
+  - cd entrypoints/fluentd_forwarder && go build
+  - cd - && go test
