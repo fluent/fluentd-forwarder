@@ -181,6 +181,7 @@ fluentd_forwarder depends on the following external libraries:
 * github.com/jehiah/go-strftime
 * github.com/moriyoshi/go-ioextras
 * gopkg.in/gcfg.v1
+* github.com/treasure-data/td-client-go
 
 License
 -------
