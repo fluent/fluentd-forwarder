@@ -40,6 +40,7 @@ type FluentdForwarderParams struct {
 	Ssl                 bool
 	SslCACertBundleFile string
 	CPUProfileFile      string
+	Metadata            string
 }
 
 type PortWorker interface {
@@ -128,6 +129,7 @@ func ParseArgs() *FluentdForwarderParams {
 	sslCACertBundleFile := ""
 	cpuProfileFile := ""
 	logFile := ""
+	metadata := ""
 
 	flagSet := flag.NewFlagSet(progName, flag.ExitOnError)
 
@@ -145,6 +147,7 @@ func ParseArgs() *FluentdForwarderParams {
 	flagSet.StringVar(&sslCACertBundleFile, "ca-certs", "", "path to SSL CA certificate bundle file")
 	flagSet.StringVar(&cpuProfileFile, "cpuprofile", "", "write CPU profile to file")
 	flagSet.StringVar(&logFile, "log-file", "", "path of the log file. log will be written to stderr if unspecified")
+	flagSet.StringVar(&metadata, "metadata", "", "set addtional data into record")
 	flagSet.Parse(os.Args[1:])
 
 	if configFile != "" {
@@ -218,6 +221,7 @@ func ParseArgs() *FluentdForwarderParams {
 		LogFile:             logFile,
 		SslCACertBundleFile: sslCACertBundleFile,
 		CPUProfileFile:      cpuProfileFile,
+		Metadata:            metadata,
 	}
 }
 
