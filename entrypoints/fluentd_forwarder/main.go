@@ -350,6 +350,7 @@ func main() {
 			params.Ssl,
 			rootCAs,
 			"", // TODO:http-proxy
+			params.Metadata,
 		)
 	}
 	if err != nil {
