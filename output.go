@@ -55,12 +55,15 @@ type ForwardOutput struct {
 	metadata             string
 }
 
-func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet, metadata string) error {
+func addMetadata(recordSet *FluentRecordSet, metadata string) {
 	if metadata != "" {
 		for _, record := range recordSet.Records {
 			record.Data["metadata"] = string(metadata)
 		}
 	}
+}
+
+func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
 	v := []interface{}{recordSet.Tag, recordSet.Records}
 	err := encoder.Encode(v)
 	if err != nil {
@@ -190,7 +193,8 @@ func (output *ForwardOutput) spawnEmitter() {
 		for recordSet := range output.emitterChan {
 			buffer.Reset()
 			encoder := codec.NewEncoder(&buffer, output.codec)
-			err := encodeRecordSet(encoder, recordSet, output.metadata)
+			addMetadata(&recordSet, output.metadata)
+			err := encodeRecordSet(encoder, recordSet)
 			if err != nil {
 				output.logger.Error("%s", err.Error())
 				continue
