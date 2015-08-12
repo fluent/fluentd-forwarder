@@ -55,14 +55,6 @@ type ForwardOutput struct {
 	metadata             string
 }
 
-func addMetadata(recordSet *FluentRecordSet, metadata string) {
-	if metadata != "" {
-		for _, record := range recordSet.Records {
-			record.Data["metadata"] = string(metadata)
-		}
-	}
-}
-
 func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
 	v := []interface{}{recordSet.Tag, recordSet.Records}
 	err := encoder.Encode(v)

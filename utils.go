@@ -25,3 +25,11 @@ func maxInt(a, b int) int {
 		return b
 	}
 }
+
+func addMetadata(recordSet *FluentRecordSet, metadata string) {
+	if metadata != "" {
+		for _, record := range recordSet.Records {
+			record.Data["metadata"] = string(metadata)
+		}
+	}
+}
