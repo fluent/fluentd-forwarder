@@ -318,6 +318,7 @@ func main() {
 			params.FlushInterval,
 			params.JournalGroupPath,
 			params.MaxJournalChunkSize,
+			params.Metadata,
 		)
 	case "td":
 		rootCAs := (*x509.CertPool)(nil)
