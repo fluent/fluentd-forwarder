@@ -335,6 +335,7 @@ func (output *TDOutput) spawnEmitter() {
 				if err != nil {
 					return err
 				}
+				addMetadata(&recordSet, output.metadata)
 				err = encodeRecords(encoder, recordSet.Records)
 				if err != nil {
 					return err
