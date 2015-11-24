@@ -1,7 +1,7 @@
 package main
 
 import (
-	gcfg "code.google.com/p/gcfg"
+	gcfg "gopkg.in/gcfg.v1"
 	"crypto/x509"
 	"flag"
 	"fmt"

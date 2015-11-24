@@ -174,7 +174,7 @@ fluentd_forwarder depends on the following external libraries:
 * github.com/op/go-logging
 * github.com/jehiah/go-strftime
 * github.com/moriyoshi/go-ioextras
-* code.google.com/p/gcfg
+* gopkg.in/gcfg.v1
 
 License
 -------

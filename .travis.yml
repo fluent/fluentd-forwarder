@@ -8,7 +8,7 @@ before_install:
   - go get github.com/op/go-logging
   - go get github.com/jehiah/go-strftime
   - go get github.com/moriyoshi/go-ioextras
-  - go get code.google.com/p/gcfg
+  - go get gopkg.in/gcfg.v1
   - go get github.com/treasure-data/td-client-go
 
 script:
