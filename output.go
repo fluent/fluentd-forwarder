@@ -52,6 +52,7 @@ type ForwardOutput struct {
 	isShuttingDown       uintptr
 	completion           sync.Cond
 	hasShutdownCompleted bool
+	metadata             string
 }
 
 func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
@@ -184,6 +185,7 @@ func (output *ForwardOutput) spawnEmitter() {
 		for recordSet := range output.emitterChan {
 			buffer.Reset()
 			encoder := codec.NewEncoder(&buffer, output.codec)
+			addMetadata(&recordSet, output.metadata)
 			err := encodeRecordSet(encoder, recordSet)
 			if err != nil {
 				output.logger.Error("%s", err.Error())
@@ -243,7 +245,7 @@ func (output *ForwardOutput) Start() {
 	syncCh <- struct{}{}
 }
 
-func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Duration, connectionTimeout time.Duration, writeTimeout time.Duration, flushInterval time.Duration, journalGroupPath string, maxJournalChunkSize int64) (*ForwardOutput, error) {
+func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Duration, connectionTimeout time.Duration, writeTimeout time.Duration, flushInterval time.Duration, journalGroupPath string, maxJournalChunkSize int64, metadata string) (*ForwardOutput, error) {
 	_codec := codec.MsgpackHandle{}
 	_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
 	_codec.RawToString = false
@@ -271,6 +273,7 @@ func NewForwardOutput(logger *logging.Logger, bind string, retryInterval time.Du
 		isShuttingDown:       0,
 		completion:           sync.Cond{L: &sync.Mutex{}},
 		hasShutdownCompleted: false,
+		metadata:             metadata,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {

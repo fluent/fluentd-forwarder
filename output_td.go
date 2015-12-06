@@ -78,6 +78,7 @@ type TDOutput struct {
 	gcChan               chan *os.File
 	completion           sync.Cond
 	hasShutdownCompleted bool
+	metadata             string
 }
 
 func encodeRecords(encoder *codec.Encoder, records []TinyFluentRecord) error {
@@ -334,6 +335,7 @@ func (output *TDOutput) spawnEmitter() {
 				if err != nil {
 					return err
 				}
+				addMetadata(&recordSet, output.metadata)
 				err = encodeRecords(encoder, recordSet.Records)
 				if err != nil {
 					return err
@@ -432,6 +434,7 @@ func NewTDOutput(
 	useSsl bool,
 	rootCAs *x509.CertPool,
 	httpProxy string,
+	metadata string,
 ) (*TDOutput, error) {
 	_codec := codec.MsgpackHandle{}
 	_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
@@ -482,6 +485,7 @@ func NewTDOutput(
 		gcChan:               make(chan *os.File, 10),
 		completion:           sync.Cond{L: &sync.Mutex{}},
 		hasShutdownCompleted: false,
+		metadata:             metadata,
 	}
 	journalGroup, err := journalFactory.GetJournalGroup(journalGroupPath, output)
 	if err != nil {

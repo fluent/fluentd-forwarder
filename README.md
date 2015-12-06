@@ -151,6 +151,12 @@ Command-line Options
   -config /etc/fluentd-forwarder/fluentd-forwarder.cfg
   ```
 
+* -metadata
+
+  Specifies the additional data to insert `metadata` record. The syntax is detailed below.
+  ```
+  -metadata "custom metadata"
+  ```
 
 Configuration File
 ------------------
