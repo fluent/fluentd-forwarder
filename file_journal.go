@@ -285,7 +285,7 @@ func (journal *FileJournal) notifyFlushListeners(chunk *FileJournalChunk) {
 	for _, listener := range journal.flushListeners {
 		err := listener.ChunkFlushed(journal.newChunkWrapper(chunk))
 		if err != nil {
-			journal.group.logger.Error("error occurred during notifying flush event: %s", err.Error())
+			journal.group.logger.Errorf("error occurred during notifying flush event: %s", err.Error())
 		}
 	}
 }
@@ -295,7 +295,7 @@ func (journal *FileJournal) notifyNewChunkListeners(chunk *FileJournalChunk) {
 	for _, listener := range journal.newChunkListeners {
 		err := listener.NewChunkCreated(journal.newChunkWrapper(chunk))
 		if err != nil {
-			journal.group.logger.Error("error occurred during notifying flush event: %s", err.Error())
+			journal.group.logger.Errorf("error occurred during notifying flush event: %s", err.Error())
 		}
 	}
 }
@@ -368,7 +368,7 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 		return nil
 	}()
 	if dequeue != nil {
-		journal.group.logger.Debug("chunks to flush: %d", dequeue.count)
+		journal.group.logger.Debugf("chunks to flush: %d", dequeue.count)
 		type pair struct {
 			chunk     *FileJournalChunk
 			futureErr <-chan error
@@ -420,7 +420,7 @@ func (journal *FileJournal) Flush(visitor func(JournalChunk) interface{}) error 
 					}
 				}
 			}
-			journal.group.logger.Debug("errors=%d, chunks=%d", len(errors), dequeue.count)
+			journal.group.logger.Debugf("errors=%d, chunks=%d", len(errors), dequeue.count)
 			if len(errors) > 0 {
 				err = errors
 			}
@@ -759,7 +759,7 @@ func scanJournals(logger *logging.Logger, pathPrefix string, pathSuffix string) 
 			variablePortion := file[len(basename) : len(file)-len(pathSuffix)]
 			info, err := DecodeJournalPath(variablePortion)
 			if err != nil {
-				logger.Warning("Unexpected file under the designated directory space (%s) - %s", dirname, file)
+				logger.Warningf("Unexpected file under the designated directory space (%s) - %s", dirname, file)
 				continue
 			}
 			journalProto, ok := journals[info.Key]
@@ -865,7 +865,7 @@ func (factory *FileJournalGroupFactory) GetJournalGroup(path string, worker Work
 		chunk.Size = position
 		journal.writer = file
 	}
-	factory.logger.Info("Path %s is designated to Worker %s", path, worker.String())
+	factory.logger.Infof("Path %s is designated to Worker %s", path, worker.String())
 	factory.paths[path] = journalGroup
 	return journalGroup, nil
 }

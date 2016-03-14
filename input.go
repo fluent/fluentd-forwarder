@@ -188,24 +188,24 @@ func (c *forwardClient) startHandling() {
 		defer func() {
 			err := c.conn.Close()
 			if err != nil {
-				c.logger.Debug("Close: %s", err.Error())
+				c.logger.Debugf("Close: %s", err.Error())
 			}
 			c.input.markDischarged(c)
 			c.input.wg.Done()
 		}()
-		c.input.logger.Info("Started handling connection from %s", c.conn.RemoteAddr().String())
+		c.input.logger.Infof("Started handling connection from %s", c.conn.RemoteAddr().String())
 		for {
 			recordSets, err := c.decodeEntries()
 			if err != nil {
 				err_, ok := err.(net.Error)
 				if ok {
 					if err_.Temporary() {
-						c.logger.Info("Temporary failure: %s", err_.Error())
+						c.logger.Infof("Temporary failure: %s", err_.Error())
 						continue
 					}
 				}
 				if err == io.EOF {
-					c.logger.Info("Client %s closed the connection", c.conn.RemoteAddr().String())
+					c.logger.Infof("Client %s closed the connection", c.conn.RemoteAddr().String())
 				} else {
 					c.logger.Error(err.Error())
 				}
@@ -220,14 +220,14 @@ func (c *forwardClient) startHandling() {
 				}
 			}
 		}
-		c.input.logger.Info("Ended handling connection from %s", c.conn.RemoteAddr().String())
+		c.input.logger.Infof("Ended handling connection from %s", c.conn.RemoteAddr().String())
 	}()
 }
 
 func (c *forwardClient) shutdown() {
 	err := c.conn.Close()
 	if err != nil {
-		c.input.logger.Info("Error during closing connection: %s", err.Error())
+		c.input.logger.Infof("Error during closing connection: %s", err.Error())
 	}
 }
 
@@ -259,7 +259,7 @@ func (input *ForwardInput) spawnAcceptor() {
 				break
 			}
 			if conn != nil {
-				input.logger.Notice("Connected from %s", conn.RemoteAddr().String())
+				input.logger.Noticef("Connected from %s", conn.RemoteAddr().String())
 				input.acceptChan <- conn
 			} else {
 				input.logger.Notice("AcceptTCP returned nil; something went wrong")
@@ -336,12 +336,12 @@ func NewForwardInput(logger *logging.Logger, bind string, port Port) (*ForwardIn
 	_codec.RawToString = false
 	addr, err := net.ResolveTCPAddr("tcp", bind)
 	if err != nil {
-		logger.Error("%s", err.Error())
+		logger.Error(err.Error())
 		return nil, err
 	}
 	listener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		logger.Error("%s", err.Error())
+		logger.Error(err.Error())
 		return nil, err
 	}
 	return &ForwardInput{

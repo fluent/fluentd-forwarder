@@ -114,7 +114,7 @@ outer:
 				if atomic.LoadUintptr(&spooler.isShuttingDown) != 0 {
 					return errors.New("Flush aborted")
 				}
-				spooler.daemon.output.logger.Info("Flushing chunk %s", chunk.String())
+				spooler.daemon.output.logger.Infof("Flushing chunk %s", chunk.String())
 				size, err := chunk.Size()
 				if err != nil {
 					return err
@@ -129,9 +129,9 @@ outer:
 					err := (error)(nil)
 					defer func() {
 						if err != nil {
-							spooler.daemon.output.logger.Info("Failed to flush chunk %s (reason: %s)", chunk.String(), err.Error())
+							spooler.daemon.output.logger.Infof("Failed to flush chunk %s (reason: %s)", chunk.String(), err.Error())
 						} else {
-							spooler.daemon.output.logger.Info("Completed flushing chunk %s", chunk.String())
+							spooler.daemon.output.logger.Infof("Completed flushing chunk %s", chunk.String())
 						}
 						<-sem
 						// disposal must be done before notifying the initiator
@@ -162,7 +162,7 @@ outer:
 				return (<-chan error)(futureErr)
 			})
 			if err != nil {
-				spooler.daemon.output.logger.Error("Error during reading from the journal: %s", err.Error())
+				spooler.daemon.output.logger.Errorf("Error during reading from the journal: %s", err.Error())
 			}
 		case <-spooler.shutdownChan:
 			break outer
@@ -219,7 +219,7 @@ func (daemon *tdOutputSpoolerDaemon) spawnSpooler(databaseName, tableName, key s
 		return spooler
 	}
 	spooler = newTDOutputSpooler(daemon, databaseName, tableName, key)
-	daemon.output.logger.Notice("Spawning spooler " + spooler.key)
+	daemon.output.logger.Noticef("Spawning spooler %s", spooler.key)
 	daemon.spoolers[spooler.key] = spooler
 	daemon.wg.Add(1)
 	go spooler.handle()
@@ -250,7 +250,7 @@ func (daemon *tdOutputSpoolerDaemon) handle() {
 	for _, key := range daemon.output.journalGroup.GetJournalKeys() {
 		pair := strings.SplitN(key, ".", 2)
 		if len(pair) != 2 {
-			daemon.output.logger.Warning("Journal %s ignored", key)
+			daemon.output.logger.Warningf("Journal %s ignored", key)
 			continue
 		}
 		daemon.spawnSpooler(pair[0], pair[1], key)
@@ -340,11 +340,11 @@ func (output *TDOutput) spawnEmitter() {
 				if err != nil {
 					return err
 				}
-				output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
+				output.logger.Debugf("Emitter processed %d entries", len(recordSet.Records))
 				return spooler.journal.Write(buffer.Bytes())
 			}()
 			if err != nil {
-				output.logger.Error("%s", err.Error())
+				output.logger.Error(err.Error())
 				continue
 			}
 		}
@@ -360,10 +360,10 @@ func (output *TDOutput) spawnTempFileCollector() {
 			output.wg.Done()
 		}()
 		for f := range output.gcChan {
-			output.logger.Debug("Deleting %s...", f.Name())
+			output.logger.Debugf("Deleting %s...", f.Name())
 			err := os.Remove(f.Name())
 			if err != nil {
-				output.logger.Warning("Failed to delete %s: %s", f.Name(), err.Error())
+				output.logger.Warningf("Failed to delete %s: %s", f.Name(), err.Error())
 			}
 		}
 		output.logger.Debug("temporary file collector ended")
@@ -405,7 +405,7 @@ func (output *TDOutput) Start() {
 		output.wg.Wait()
 		err := output.journalGroup.Dispose()
 		if err != nil {
-			output.logger.Error("%s", err.Error())
+			output.logger.Error(err.Error())
 		}
 		output.completion.L.Lock()
 		output.hasShutdownCompleted = true
