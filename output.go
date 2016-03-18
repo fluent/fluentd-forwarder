@@ -66,10 +66,10 @@ func encodeRecordSet(encoder *codec.Encoder, recordSet FluentRecordSet) error {
 
 func (output *ForwardOutput) ensureConnected() error {
 	if output.conn == nil {
-		output.logger.Notice("Connecting to %s...", output.bind)
+		output.logger.Noticef("Connecting to %s...", output.bind)
 		conn, err := net.DialTimeout("tcp", output.bind, output.connectionTimeout)
 		if err != nil {
-			output.logger.Error("Failed to connect to %s (reason: %s)", output.bind, err.Error())
+			output.logger.Errorf("Failed to connect to %s (reason: %s)", output.bind, err.Error())
 			return err
 		} else {
 			output.conn = conn
@@ -85,7 +85,7 @@ func (output *ForwardOutput) sendBuffer(buf []byte) error {
 		}
 		err := output.ensureConnected()
 		if err != nil {
-			output.logger.Info("Will be retried in %s", output.retryInterval.String())
+			output.logger.Infof("Will be retried in %s", output.retryInterval.String())
 			time.Sleep(output.retryInterval)
 			continue
 		}
@@ -98,7 +98,7 @@ func (output *ForwardOutput) sendBuffer(buf []byte) error {
 		n, err := output.conn.Write(buf)
 		buf = buf[n:]
 		if err != nil {
-			output.logger.Error("Failed to flush buffer (reason: %s, left: %d bytes)", err.Error(), len(buf))
+			output.logger.Errorf("Failed to flush buffer (reason: %s, left: %d bytes)", err.Error(), len(buf))
 			err_, ok := err.(net.Error)
 			if !ok || (!err_.Timeout() && !err_.Temporary()) {
 				output.conn.Close()
@@ -108,7 +108,7 @@ func (output *ForwardOutput) sendBuffer(buf []byte) error {
 		}
 		if n > 0 {
 			elapsed := time.Now().Sub(startTime)
-			output.logger.Info("Forwarded %d bytes in %f seconds (%d bytes left)\n", n, elapsed.Seconds(), len(buf))
+			output.logger.Infof("Forwarded %d bytes in %f seconds (%d bytes left)\n", n, elapsed.Seconds(), len(buf))
 		}
 	}
 	return nil
@@ -137,7 +137,7 @@ func (output *ForwardOutput) spawnSpooler() {
 				output.logger.Notice("Flushing...")
 				err := output.journal.Flush(func(chunk JournalChunk) interface{} {
 					defer chunk.Dispose()
-					output.logger.Info("Flushing chunk %s", chunk.String())
+					output.logger.Infof("Flushing chunk %s", chunk.String())
 					reader, err := chunk.Reader()
 					defer reader.Close()
 					if err != nil {
@@ -162,7 +162,7 @@ func (output *ForwardOutput) spawnSpooler() {
 					return nil
 				})
 				if err != nil {
-					output.logger.Error("Error during reading from the journal: %s", err.Error())
+					output.logger.Errorf("Error during reading from the journal: %s", err.Error())
 				}
 			case <-output.spoolerShutdownChan:
 				break outer
@@ -188,10 +188,10 @@ func (output *ForwardOutput) spawnEmitter() {
 			addMetadata(&recordSet, output.metadata)
 			err := encodeRecordSet(encoder, recordSet)
 			if err != nil {
-				output.logger.Error("%s", err.Error())
+				output.logger.Error(err.Error())
 				continue
 			}
-			output.logger.Debug("Emitter processed %d entries", len(recordSet.Records))
+			output.logger.Debugf("Emitter processed %d entries", len(recordSet.Records))
 			output.journal.Write(buffer.Bytes())
 		}
 		output.logger.Notice("Emitter ended")
@@ -233,7 +233,7 @@ func (output *ForwardOutput) Start() {
 		output.wg.Wait()
 		err := output.journalGroup.Dispose()
 		if err != nil {
-			output.logger.Error("%s", err.Error())
+			output.logger.Error(err.Error())
 		}
 		output.completion.L.Lock()
 		output.hasShutdownCompleted = true

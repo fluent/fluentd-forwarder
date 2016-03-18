@@ -1,14 +1,14 @@
 package main
 
 import (
-	gcfg "gopkg.in/gcfg.v1"
 	"crypto/x509"
 	"flag"
 	"fmt"
+	fluentd_forwarder "github.com/fluent/fluentd-forwarder"
 	strftime "github.com/jehiah/go-strftime"
 	ioextras "github.com/moriyoshi/go-ioextras"
 	logging "github.com/op/go-logging"
-	fluentd_forwarder "github.com/fluent/fluentd-forwarder"
+	gcfg "gopkg.in/gcfg.v1"
 	"io"
 	"io/ioutil"
 	"log"
@@ -290,7 +290,7 @@ func main() {
 	logger := logging.MustGetLogger("fluentd-forwarder")
 	logging.SetLevel(params.LogLevel, "fluentd-forwarder")
 	if progVersion != "" {
-		logger.Info("Version %s starting...", progVersion)
+		logger.Infof("Version %s starting...", progVersion)
 	}
 
 	workerSet := fluentd_forwarder.NewWorkerSet()
