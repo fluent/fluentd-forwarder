@@ -41,7 +41,7 @@ func main() {
 		bail(err.Error(), 1)
 	}
 	for _, app := range os.Args[1:] {
-		cmd := exec.Command("go", "get", "-u", "-ldflags", fmt.Sprintf("-X %s %s", VersionStringVarName, rev), path.Join(ImportPathBase, "entrypoints", app))
+		cmd := exec.Command("go", "get", "-u", "-ldflags", fmt.Sprintf("-X %s=%s", VersionStringVarName, rev), path.Join(ImportPathBase, "entrypoints", app))
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
